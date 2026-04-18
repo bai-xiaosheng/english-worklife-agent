@@ -5,172 +5,259 @@ import { fileURLToPath } from "url";
 
 import { config } from "./config.js";
 import { scenarios, getScenarioById } from "./data/scenarios.js";
+import { createRepository } from "./data/repository.js";
 import { analyzeMessage } from "./services/feedbackService.js";
 import { generateRoleplayReply } from "./services/agentService.js";
 import { getProgressSummary, recordPractice } from "./services/progressService.js";
-import { getProfile, getSession, saveProfile, upsertSession } from "./data/inMemoryStore.js";
-
-const app = express();
-
-app.use(cors());
-app.use(express.json({ limit: "1mb" }));
+import {
+  hashPassword,
+  normalizeEmail,
+  publicUser,
+  signAuthToken,
+  validateCredentials,
+  verifyPassword
+} from "./services/authService.js";
+import { requireAuth } from "./middleware/authMiddleware.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const publicDir = path.resolve(__dirname, "..", "public");
-app.use(express.static(publicDir));
 
-app.get("/api/health", (_req, res) => {
-  res.json({
-    ok: true,
-    now: new Date().toISOString()
-  });
-});
-
-app.get("/api/v1/scenarios", (_req, res) => {
-  res.json({ scenarios });
-});
-
-app.post("/api/v1/session/init", (req, res) => {
-  const { userId, profile = {} } = req.body || {};
-  if (!userId) {
-    res.status(400).json({ error: "userId is required." });
-    return;
-  }
-
-  const mergedProfile = {
+function buildDefaultProfile(override = {}) {
+  return {
     goal: "overseas-worklife",
-    level: profile.level || config.defaultLevel,
-    dailyMinutes: Number(profile.dailyMinutes || 15),
-    preferredLocale: profile.preferredLocale || "zh-CN"
+    level: override.level || config.defaultLevel,
+    dailyMinutes: Number(override.dailyMinutes || 15),
+    preferredLocale: override.preferredLocale || "zh-CN"
   };
+}
 
-  saveProfile(userId, mergedProfile);
+async function createApp() {
+  const repository = await createRepository();
+  const app = express();
 
-  upsertSession(userId, {
-    userId,
-    history: [],
-    updatedAt: new Date().toISOString()
+  app.use(cors());
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.static(publicDir));
+
+  app.get("/api/health", (_req, res) => {
+    res.json({
+      ok: true,
+      now: new Date().toISOString(),
+      storage: repository.mode
+    });
   });
 
-  res.json({
-    userId,
-    profile: mergedProfile,
-    scenarios
-  });
-});
-
-app.post("/api/v1/chat", async (req, res) => {
-  const { userId, scenarioId, message, useChineseHint = true } = req.body || {};
-  if (!userId || !scenarioId || !message) {
-    res.status(400).json({ error: "userId, scenarioId and message are required." });
-    return;
-  }
-
-  const scenario = getScenarioById(scenarioId);
-  if (!scenario) {
-    res.status(404).json({ error: "Scenario not found." });
-    return;
-  }
-
-  const profile = getProfile(userId) || {
-    goal: "overseas-worklife",
-    level: config.defaultLevel,
-    dailyMinutes: 15,
-    preferredLocale: "zh-CN"
-  };
-
-  const session = getSession(userId) || { history: [] };
-  const feedback = analyzeMessage(message, profile.level);
-  const roleplay = await generateRoleplayReply({
-    scenario,
-    profile,
-    useChineseHint,
-    history: session.history.slice(-8),
-    userMessage: message
+  app.get("/api/v1/scenarios", (_req, res) => {
+    res.json({ scenarios });
   });
 
-  const nextHistory = [
-    ...session.history,
-    { role: "user", text: message, ts: new Date().toISOString() },
-    { role: "assistant", text: roleplay.text, ts: new Date().toISOString() }
-  ].slice(-20);
+  app.post("/api/v1/auth/register", async (req, res) => {
+    const { email, password, displayName = "", profile = {} } = req.body || {};
+    const validated = validateCredentials({ email, password });
+    if (validated.errors.length) {
+      res.status(400).json({ error: validated.errors.join(" ") });
+      return;
+    }
 
-  upsertSession(userId, {
-    ...session,
-    userId,
-    history: nextHistory,
-    updatedAt: new Date().toISOString()
+    const existingUser = await repository.getUserByEmail(validated.email);
+    if (existingUser) {
+      res.status(409).json({ error: "Email already registered." });
+      return;
+    }
+
+    const passwordHash = await hashPassword(validated.password);
+    const user = await repository.createUser({
+      email: validated.email,
+      passwordHash,
+      displayName: String(displayName || "").trim()
+    });
+    const mergedProfile = buildDefaultProfile(profile);
+    await repository.saveProfile(user.id, mergedProfile);
+    await repository.upsertSession(user.id, { history: [] });
+
+    const token = signAuthToken(user);
+    res.status(201).json({
+      token,
+      user: publicUser(user),
+      profile: mergedProfile
+    });
   });
 
-  const practiceRecord = recordPractice({
-    userId,
-    scenarioId,
-    fluencyScore: feedback.fluencyScore,
-    accuracyScore: feedback.accuracyScore,
-    errorTags: feedback.errorTags
+  app.post("/api/v1/auth/login", async (req, res) => {
+    const email = normalizeEmail(req.body?.email);
+    const password = String(req.body?.password || "");
+    if (!email || !password) {
+      res.status(400).json({ error: "Email and password are required." });
+      return;
+    }
+
+    const user = await repository.getUserByEmail(email);
+    if (!user) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+
+    const matched = await verifyPassword(password, user.passwordHash);
+    if (!matched) {
+      res.status(401).json({ error: "Invalid email or password." });
+      return;
+    }
+
+    const token = signAuthToken(user);
+    const profile = (await repository.getProfile(user.id)) || buildDefaultProfile();
+    res.json({
+      token,
+      user: publicUser(user),
+      profile
+    });
   });
 
-  res.json({
-    scenario: {
-      id: scenario.id,
-      title: scenario.title
-    },
-    assistant: {
-      roleplayReply: roleplay.text,
-      source: roleplay.source,
-      fallbackReason: roleplay.fallbackReason || null
-    },
-    feedback: {
-      quickFixes: feedback.quickFixes,
-      rewrite: feedback.rewrite,
-      coachTip: feedback.coachTip,
-      vocabularyTips: feedback.vocabularyTips,
+  app.get("/api/v1/auth/me", requireAuth, async (req, res) => {
+    const user = await repository.getUserById(req.auth.userId);
+    if (!user) {
+      res.status(401).json({ error: "User no longer exists." });
+      return;
+    }
+
+    const profile = (await repository.getProfile(user.id)) || buildDefaultProfile();
+    res.json({
+      user: publicUser(user),
+      profile
+    });
+  });
+
+  app.post("/api/v1/session/init", requireAuth, async (req, res) => {
+    const userId = req.auth.userId;
+    const { profile = {} } = req.body || {};
+    const currentProfile = (await repository.getProfile(userId)) || buildDefaultProfile();
+    const mergedProfile = buildDefaultProfile({
+      ...currentProfile,
+      ...profile
+    });
+
+    await repository.saveProfile(userId, mergedProfile);
+    await repository.upsertSession(userId, { history: [] });
+
+    res.json({
+      userId,
+      profile: mergedProfile,
+      scenarios
+    });
+  });
+
+  app.post("/api/v1/chat", requireAuth, async (req, res) => {
+    const userId = req.auth.userId;
+    const { scenarioId, message, useChineseHint = true } = req.body || {};
+    if (!scenarioId || !message) {
+      res.status(400).json({ error: "scenarioId and message are required." });
+      return;
+    }
+
+    const scenario = getScenarioById(scenarioId);
+    if (!scenario) {
+      res.status(404).json({ error: "Scenario not found." });
+      return;
+    }
+
+    const profile = (await repository.getProfile(userId)) || buildDefaultProfile();
+    const session = (await repository.getSession(userId)) || { history: [] };
+    const feedback = analyzeMessage(message, profile.level);
+    const roleplay = await generateRoleplayReply({
+      scenario,
+      profile,
+      useChineseHint,
+      history: session.history.slice(-8),
+      userMessage: message
+    });
+
+    const nowIso = new Date().toISOString();
+    const nextHistory = [
+      ...session.history,
+      { role: "user", text: message, ts: nowIso },
+      { role: "assistant", text: roleplay.text, ts: nowIso }
+    ].slice(-20);
+
+    await repository.upsertSession(userId, {
+      history: nextHistory
+    });
+
+    const practiceRecord = await recordPractice(repository, {
+      userId,
+      scenarioId,
       fluencyScore: feedback.fluencyScore,
       accuracyScore: feedback.accuracyScore,
       errorTags: feedback.errorTags
-    },
-    practiceRecord
-  });
-});
+    });
 
-app.get("/api/v1/progress/:userId", (req, res) => {
-  const { userId } = req.params;
-  if (!userId) {
-    res.status(400).json({ error: "userId is required." });
-    return;
-  }
-
-  const profile = getProfile(userId);
-  const progress = getProgressSummary(userId);
-  res.json({ profile, progress });
-});
-
-app.post("/api/v1/progress/record", (req, res) => {
-  const { userId, scenarioId, fluencyScore, accuracyScore, errorTags = [], source = "manual" } = req.body || {};
-  if (!userId || !scenarioId) {
-    res.status(400).json({ error: "userId and scenarioId are required." });
-    return;
-  }
-
-  const record = recordPractice({
-    userId,
-    scenarioId,
-    fluencyScore: Number(fluencyScore || 0),
-    accuracyScore: Number(accuracyScore || 0),
-    errorTags,
-    source
+    res.json({
+      scenario: {
+        id: scenario.id,
+        title: scenario.title
+      },
+      assistant: {
+        roleplayReply: roleplay.text,
+        source: roleplay.source,
+        fallbackReason: roleplay.fallbackReason || null
+      },
+      feedback: {
+        quickFixes: feedback.quickFixes,
+        rewrite: feedback.rewrite,
+        coachTip: feedback.coachTip,
+        vocabularyTips: feedback.vocabularyTips,
+        fluencyScore: feedback.fluencyScore,
+        accuracyScore: feedback.accuracyScore,
+        errorTags: feedback.errorTags
+      },
+      practiceRecord
+    });
   });
 
-  res.json({ record });
-});
+  app.get("/api/v1/progress/me", requireAuth, async (req, res) => {
+    const userId = req.auth.userId;
+    const profile = await repository.getProfile(userId);
+    const progress = await getProgressSummary(repository, userId);
+    res.json({ profile, progress });
+  });
 
-app.get("*", (_req, res) => {
-  res.sendFile(path.join(publicDir, "index.html"));
-});
+  app.post("/api/v1/progress/record", requireAuth, async (req, res) => {
+    const userId = req.auth.userId;
+    const { scenarioId, fluencyScore, accuracyScore, errorTags = [], source = "manual" } = req.body || {};
+    if (!scenarioId) {
+      res.status(400).json({ error: "scenarioId is required." });
+      return;
+    }
 
-app.listen(config.port, () => {
+    const record = await recordPractice(repository, {
+      userId,
+      scenarioId,
+      fluencyScore: Number(fluencyScore || 0),
+      accuracyScore: Number(accuracyScore || 0),
+      errorTags,
+      source
+    });
+
+    res.json({ record });
+  });
+
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(publicDir, "index.html"));
+  });
+
+  return { app, repository };
+}
+
+async function start() {
+  const { app, repository } = await createApp();
+  app.listen(config.port, () => {
+    // eslint-disable-next-line no-console
+    console.log(`English Worklife Agent running at http://localhost:${config.port} (${repository.mode})`);
+  });
+}
+
+start().catch((error) => {
   // eslint-disable-next-line no-console
-  console.log(`English Worklife Agent running at http://localhost:${config.port}`);
+  console.error("Failed to start server:", error);
+  process.exit(1);
 });
 

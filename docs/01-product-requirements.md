@@ -1,64 +1,57 @@
-# PRD v1 - English Worklife Agent
+# PRD v2 - English Worklife Agent
 
-## 1. 产品目标
+## 1. Product Goal
 
-帮助中文用户通过高频、低负担的日常对话练习，在国外工作与生活场景中能够：
+Help Chinese learners become functional in real overseas work-life conversations:
+- Understand intent quickly
+- Respond clearly
+- Keep conversation moving when communication friction appears
 
-- 听懂并快速回应
-- 表达需求和观点
-- 在出现沟通阻碍时继续推进对话
+## 2. Target Users
 
-## 2. 目标用户
+- English level: A1 to B1
+- Main goal: work and daily life communication abroad
+- Device priority: mobile browser (short daily sessions)
 
-- 英语水平：A1-B1
-- 使用目标：海外工作沟通、租房办事、社交交流、日常生活
-- 使用设备：手机优先（碎片化学习）
+## 3. Core Scenarios
 
-## 3. 关键场景
+1. Work: standups, 1:1 updates, risk communication, meeting alignment
+2. Daily life: renting, shopping, doctor appointments, banking, telecom support
+3. Social: small talk, invitations, polite disagreement
 
-1. 职场：自我介绍、会议发言、任务对齐、向上反馈
-2. 生活：租房、购物、看病、问路、银行与运营商沟通
-3. 社交：small talk、邀约、表达感谢与拒绝
+## 4. MVP + Phase 2 Scope
 
-## 4. 功能范围（MVP）
+1. User account and profile
+- Register/login with email + password
+- Profile fields: level, daily minutes, preferred locale
 
-1. 用户档案
-- 设置目标（海外工作生活）
-- 设定英语等级与每日学习时长（15 分钟）
+2. Scenario roleplay
+- AI acts as the counterpart
+- User replies by text or voice
 
-2. 场景化对话
-- 选择场景进行角色扮演
-- AI 扮演真实对话对象并持续推进话题
+3. Hybrid correction
+- During conversation: light coaching
+- After each turn: rewrite and short explanation
 
-3. 混合纠错
-- 对话中：轻量提示（不打断流畅度）
-- 对话后：总结语法、词汇、表达自然度并给出改写
+4. Learning tracking
+- Practice count, fluency/accuracy trend, top error tags
+- User-level progress tied to account identity
 
-4. 语音交互
-- 语音输入（ASR）
-- AI 语音播报（TTS）
+5. Storage strategy
+- In-memory fallback for quick local runs
+- PostgreSQL for persistent records
 
-5. 学习追踪
-- 记录练习次数、平均分、常见错误类型
-- 生成周进步反馈（MVP 先提供基础统计）
+## 5. Non-functional Requirements
 
-## 5. 非功能需求
+- Mobile-first responsive UX
+- App works without model key via local fallback reply strategy
+- Auth-protected data APIs
+- Optional PostgreSQL deployment without changing app code
 
-- 移动端可用，首屏加载 < 3 秒（普通网络）
-- 服务可观测，核心 API 有日志与健康检查
-- 支持无模型 Key 的降级运行（本地回退回复）
+## 6. Success Metrics
 
-## 6. 成功指标（MVP）
-
-- D7 留存 >= 20%
-- 人均日练习时长 >= 10 分钟
-- 首次完成 3 个场景练习的用户比例 >= 40%
-- 用户主观评分（“对真实沟通有帮助”）>= 4/5
-
-## 7. 验收标准
-
-1. 用户可在手机浏览器完成一次完整对话练习（语音或文字）
-2. 每次发送后可看到即时反馈和更地道表达
-3. 系统可记录并查询学习进度
-4. 模型不可用时系统仍可正常练习
+- D7 retention >= 20%
+- Daily average practice >= 10 minutes
+- 3-scenario completion rate >= 40%
+- User rating for practical usefulness >= 4/5
 

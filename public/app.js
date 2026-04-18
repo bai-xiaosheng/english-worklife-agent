@@ -1,16 +1,22 @@
 const state = {
-  userId: localStorage.getItem("ewa_user_id") || `user-${Math.random().toString(36).slice(2, 10)}`,
+  token: localStorage.getItem("ewa_token") || "",
+  user: null,
+  profile: null,
   scenarios: [],
-  selectedScenarioId: "",
   sessionReady: false,
   lastAssistantMessage: "",
   recognition: null,
   listening: false
 };
 
-localStorage.setItem("ewa_user_id", state.userId);
-
 const els = {
+  emailInput: document.querySelector("#emailInput"),
+  passwordInput: document.querySelector("#passwordInput"),
+  displayNameInput: document.querySelector("#displayNameInput"),
+  registerBtn: document.querySelector("#registerBtn"),
+  loginBtn: document.querySelector("#loginBtn"),
+  logoutBtn: document.querySelector("#logoutBtn"),
+  authStatus: document.querySelector("#authStatus"),
   levelSelect: document.querySelector("#levelSelect"),
   dailyMinutesInput: document.querySelector("#dailyMinutesInput"),
   scenarioSelect: document.querySelector("#scenarioSelect"),
@@ -34,15 +40,16 @@ boot();
 async function boot() {
   registerPWA();
   setupVoiceRecognition();
-  await loadScenarios();
   bindEvents();
-  appendBubble(
-    "assistant",
-    "Welcome! Pick a scenario and send your first sentence. We will train for real overseas work-life conversations."
-  );
+  await loadScenarios();
+  await tryRestoreSession();
+  appendBubble("assistant", "Welcome! Please login, then start your English practice.");
 }
 
 function bindEvents() {
+  els.registerBtn.addEventListener("click", register);
+  els.loginBtn.addEventListener("click", login);
+  els.logoutBtn.addEventListener("click", logout);
   els.initBtn.addEventListener("click", initSession);
   els.sendBtn.addEventListener("click", sendMessage);
   els.voiceBtn.addEventListener("click", toggleVoiceInput);
@@ -55,19 +62,40 @@ function bindEvents() {
 }
 
 async function loadScenarios() {
-  const data = await request("/api/v1/scenarios");
+  const data = await request("/api/v1/scenarios", { skipAuth: true });
   state.scenarios = data.scenarios || [];
   els.scenarioSelect.innerHTML = state.scenarios
     .map((scenario) => `<option value="${scenario.id}">${scenario.title}</option>`)
     .join("");
-  state.selectedScenarioId = state.scenarios[0]?.id || "";
 }
 
-async function initSession() {
-  state.selectedScenarioId = els.scenarioSelect.value;
+async function tryRestoreSession() {
+  if (!state.token) {
+    updateAuthStatus();
+    return;
+  }
 
+  try {
+    const data = await request("/api/v1/auth/me");
+    state.user = data.user;
+    state.profile = data.profile;
+    hydrateProfileForm();
+    updateAuthStatus();
+    await refreshProgress();
+  } catch (_error) {
+    clearAuth();
+    updateAuthStatus();
+  }
+}
+
+async function register() {
+  const email = els.emailInput.value.trim();
+  const password = els.passwordInput.value;
+  const displayName = els.displayNameInput.value.trim();
   const payload = {
-    userId: state.userId,
+    email,
+    password,
+    displayName,
     profile: {
       level: els.levelSelect.value,
       dailyMinutes: Number(els.dailyMinutesInput.value || 15),
@@ -75,11 +103,93 @@ async function initSession() {
     }
   };
 
-  await request("/api/v1/session/init", {
+  const data = await request("/api/v1/auth/register", {
+    method: "POST",
+    body: JSON.stringify(payload),
+    skipAuth: true
+  });
+
+  afterAuthSuccess(data);
+  appendBubble("assistant", "Registration completed. Let's begin your first practice.");
+}
+
+async function login() {
+  const email = els.emailInput.value.trim();
+  const password = els.passwordInput.value;
+
+  const data = await request("/api/v1/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+    skipAuth: true
+  });
+
+  afterAuthSuccess(data);
+  appendBubble("assistant", "Login successful. Keep your daily 15-minute streak.");
+}
+
+function logout() {
+  clearAuth();
+  state.sessionReady = false;
+  updateAuthStatus();
+  els.progressStats.textContent = "请先登录并开始练习。";
+  appendBubble("assistant", "You are logged out.");
+}
+
+function afterAuthSuccess(data) {
+  state.token = data.token;
+  state.user = data.user;
+  state.profile = data.profile || null;
+  localStorage.setItem("ewa_token", state.token);
+  hydrateProfileForm();
+  updateAuthStatus();
+}
+
+function clearAuth() {
+  state.token = "";
+  state.user = null;
+  state.profile = null;
+  localStorage.removeItem("ewa_token");
+}
+
+function hydrateProfileForm() {
+  if (!state.profile) return;
+  els.levelSelect.value = state.profile.level || "A2";
+  els.dailyMinutesInput.value = state.profile.dailyMinutes || 15;
+}
+
+function updateAuthStatus() {
+  if (!state.user) {
+    els.authStatus.textContent = "未登录";
+    return;
+  }
+
+  const displayName = state.user.displayName ? ` (${state.user.displayName})` : "";
+  els.authStatus.textContent = `已登录: ${state.user.email}${displayName}`;
+}
+
+function ensureAuthOrThrow() {
+  if (!state.token) {
+    throw new Error("请先登录后再开始练习。");
+  }
+}
+
+async function initSession() {
+  ensureAuthOrThrow();
+
+  const payload = {
+    profile: {
+      level: els.levelSelect.value,
+      dailyMinutes: Number(els.dailyMinutesInput.value || 15),
+      preferredLocale: "zh-CN"
+    }
+  };
+
+  const data = await request("/api/v1/session/init", {
     method: "POST",
     body: JSON.stringify(payload)
   });
 
+  state.profile = data.profile;
   state.sessionReady = true;
   appendBubble("assistant", "Session ready. Start speaking English. I will coach you step by step.");
   await refreshProgress();
@@ -89,6 +199,7 @@ async function sendMessage() {
   const message = els.messageInput.value.trim();
   if (!message) return;
 
+  ensureAuthOrThrow();
   if (!state.sessionReady) {
     await initSession();
   }
@@ -101,7 +212,6 @@ async function sendMessage() {
     const response = await request("/api/v1/chat", {
       method: "POST",
       body: JSON.stringify({
-        userId: state.userId,
         scenarioId: els.scenarioSelect.value,
         message,
         useChineseHint: els.chineseHintToggle.checked
@@ -153,12 +263,11 @@ function renderFixes(fixes) {
 }
 
 async function refreshProgress() {
-  const data = await request(`/api/v1/progress/${state.userId}`);
-  const progress = data.progress || {};
+  ensureAuthOrThrow();
 
-  const topErrors = (progress.topErrors || [])
-    .map((item) => `${item.tag}(${item.count})`)
-    .join(", ");
+  const data = await request("/api/v1/progress/me");
+  const progress = data.progress || {};
+  const topErrors = (progress.topErrors || []).map((item) => `${item.tag}(${item.count})`).join(", ");
 
   els.progressStats.innerHTML = [
     `累计练习次数：<strong>${progress.totalPractices || 0}</strong>`,
@@ -228,13 +337,25 @@ function speakAssistantReply() {
 }
 
 async function request(url, options = {}) {
+  const headers = { "Content-Type": "application/json" };
+  if (!options.skipAuth && state.token) {
+    headers.Authorization = `Bearer ${state.token}`;
+  }
+
   const response = await fetch(url, {
-    headers: { "Content-Type": "application/json" },
-    ...options
+    ...options,
+    headers: {
+      ...headers,
+      ...(options.headers || {})
+    }
   });
 
   if (!response.ok) {
     const text = await response.text();
+    if (response.status === 401 && !options.skipAuth) {
+      clearAuth();
+      updateAuthStatus();
+    }
     throw new Error(text || `Request failed with ${response.status}`);
   }
 

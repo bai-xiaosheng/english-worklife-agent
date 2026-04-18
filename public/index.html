@@ -23,9 +23,33 @@
         <p class="eyebrow">Daily 15 Minutes</p>
         <h1>英语工作生活沟通训练</h1>
         <p class="subtitle">
-          手机就能练。文字或语音都可以，系统会即时纠错并给你更自然的表达。
+          面向海外工作生活。登录后可持续追踪你的学习轨迹，支持文字与语音练习。
         </p>
       </header>
+
+      <section class="panel auth-panel">
+        <h2>账号登录</h2>
+        <div id="authStatus" class="auth-status">未登录</div>
+        <div class="grid">
+          <label>
+            邮箱
+            <input id="emailInput" type="email" placeholder="you@example.com" />
+          </label>
+          <label>
+            密码
+            <input id="passwordInput" type="password" placeholder="至少8位" />
+          </label>
+          <label>
+            昵称（注册时可选）
+            <input id="displayNameInput" type="text" placeholder="例如 Alex" />
+          </label>
+        </div>
+        <div class="auth-actions">
+          <button id="registerBtn" class="btn secondary" type="button">注册</button>
+          <button id="loginBtn" class="btn primary" type="button">登录</button>
+          <button id="logoutBtn" class="btn ghost" type="button">退出</button>
+        </div>
+      </section>
 
       <section class="panel setup-panel">
         <h2>学习设置</h2>
@@ -89,7 +113,7 @@
 
       <section class="panel progress-panel">
         <h2>学习进度</h2>
-        <div id="progressStats" class="progress-stats">请先开始练习。</div>
+        <div id="progressStats" class="progress-stats">请先登录并开始练习。</div>
       </section>
     </main>
 

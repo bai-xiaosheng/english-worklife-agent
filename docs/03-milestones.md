@@ -1,30 +1,30 @@
-# 里程碑计划
+# Milestones
 
-## Phase 0 - 对齐（已完成）
+## Phase 0 - Alignment (Done)
 
-- 明确目标用户：海外工作生活沟通
-- 明确交互方式：文字 + 语音
-- 明确首版策略：Web/PWA 优先，QQ Bot 不做核心
+- Target user and product direction confirmed
+- Interaction modes confirmed: text + voice
+- Product channel confirmed: standalone Web/PWA first
 
-## Phase 1 - MVP（当前）
+## Phase 1 - MVP (Done)
 
-1. 需求与架构文档
-2. 后端 API 骨架（会话、对话、进度）
-3. 前端移动端页面（文本 + 语音）
-4. 本地回退逻辑（无模型可运行）
-5. 基础测试与运行说明
+- Product and architecture docs
+- Core API for scenarios/chat/progress
+- Mobile-friendly frontend and voice interaction
+- Model fallback response strategy
+- Basic tests and local run instructions
 
-## Phase 2 - Beta
+## Phase 2 - Beta Foundation (In Progress)
 
-1. 数据持久化（PostgreSQL）
-2. 账号体系（邮箱/手机号/第三方登录）
-3. 周报和学习计划
-4. 语音质量提升（服务端 ASR/TTS）
+- Done: account system (register/login/JWT)
+- Done: optional PostgreSQL data layer
+- Next: weekly report generation
+- Next: speaking quality upgrades with stronger ASR/TTS options
 
 ## Phase 3 - Growth
 
-1. 企业与职场专项课程包
-2. 多地区英语变体（美式/英式/澳式）
-3. 多渠道接入（Telegram/WhatsApp）
-4. A/B 实验与推荐系统
+- Work-specific course paths
+- Region-specific English variants
+- Additional channels (Telegram/WhatsApp)
+- A/B experimentation for learning outcomes
 

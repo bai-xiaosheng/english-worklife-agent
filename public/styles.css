@@ -94,6 +94,18 @@ body {
   font-size: 1.1rem;
 }
 
+.auth-status {
+  margin-bottom: 10px;
+  font-weight: 700;
+  color: #244b4d;
+}
+
+.auth-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -272,4 +284,3 @@ textarea {
     grid-row: span 2;
   }
 }
-

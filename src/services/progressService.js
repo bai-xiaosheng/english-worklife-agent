@@ -1,14 +1,6 @@
-import { getPracticeRecords, pushPracticeRecord } from "../data/inMemoryStore.js";
 import { averageScore } from "../utils/score.js";
 
-export function recordPractice({
-  userId,
-  scenarioId,
-  fluencyScore,
-  accuracyScore,
-  errorTags = [],
-  source = "chat"
-}) {
+export async function recordPractice(repository, { userId, scenarioId, fluencyScore, accuracyScore, errorTags = [], source = "chat" }) {
   const record = {
     userId,
     scenarioId,
@@ -19,12 +11,10 @@ export function recordPractice({
     createdAt: new Date().toISOString()
   };
 
-  pushPracticeRecord(userId, record);
-  return record;
+  return repository.addPracticeRecord(record);
 }
 
-export function getProgressSummary(userId) {
-  const records = getPracticeRecords(userId);
+function buildProgressSummary(userId, records) {
   const errorFreq = {};
 
   for (const record of records) {
@@ -48,3 +38,7 @@ export function getProgressSummary(userId) {
   };
 }
 
+export async function getProgressSummary(repository, userId) {
+  const records = await repository.getPracticeRecords(userId);
+  return buildProgressSummary(userId, records);
+}
