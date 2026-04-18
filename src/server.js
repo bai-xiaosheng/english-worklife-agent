@@ -9,6 +9,7 @@ import { createRepository } from "./data/repository.js";
 import { analyzeMessage } from "./services/feedbackService.js";
 import { generateRoleplayReply } from "./services/agentService.js";
 import { getProgressSummary, recordPractice } from "./services/progressService.js";
+import { buildDailyDashboard, getTodayKey } from "./services/dailyCoachService.js";
 import {
   hashPassword,
   normalizeEmail,
@@ -190,6 +191,18 @@ async function createApp() {
       errorTags: feedback.errorTags
     });
 
+    const progress = await getProgressSummary(repository, userId);
+    const todayKey = getTodayKey(config.appTimeZone);
+    const todayCheckin = await repository.getDailyCheckin(userId, todayKey);
+    const dailyDashboard = buildDailyDashboard({
+      profile,
+      progress,
+      records: await repository.getPracticeRecords(userId),
+      checkin: todayCheckin,
+      scenarios,
+      timeZone: config.appTimeZone
+    });
+
     res.json({
       scenario: {
         id: scenario.id,
@@ -209,7 +222,12 @@ async function createApp() {
         accuracyScore: feedback.accuracyScore,
         errorTags: feedback.errorTags
       },
-      practiceRecord
+      practiceRecord,
+      dailyHint: {
+        focusScenarioId: dailyDashboard.focusScenarioId,
+        topErrorTag: dailyDashboard.topErrorTag,
+        nextTask: dailyDashboard.plan.tasks.find((item) => !item.completed)?.title || "Daily tasks completed"
+      }
     });
   });
 
@@ -240,6 +258,53 @@ async function createApp() {
     res.json({ record });
   });
 
+  app.get("/api/v1/daily/dashboard", requireAuth, async (req, res) => {
+    const userId = req.auth.userId;
+    const profile = (await repository.getProfile(userId)) || buildDefaultProfile();
+    const progress = await getProgressSummary(repository, userId);
+    const records = await repository.getPracticeRecords(userId);
+    const todayKey = getTodayKey(config.appTimeZone);
+    const checkin = await repository.getDailyCheckin(userId, todayKey);
+    const dashboard = buildDailyDashboard({
+      profile,
+      progress,
+      records,
+      checkin,
+      scenarios,
+      timeZone: config.appTimeZone
+    });
+
+    res.json({ dashboard });
+  });
+
+  app.post("/api/v1/daily/checkin", requireAuth, async (req, res) => {
+    const userId = req.auth.userId;
+    const completedTaskIds = Array.isArray(req.body?.completedTaskIds) ? req.body.completedTaskIds : [];
+    const note = String(req.body?.note || "");
+    const dateKey = String(req.body?.dateKey || getTodayKey(config.appTimeZone));
+
+    const checkin = await repository.upsertDailyCheckin({
+      userId,
+      dateKey,
+      completedTaskIds: completedTaskIds.filter((item) => typeof item === "string" && item.trim()),
+      note
+    });
+
+    const profile = (await repository.getProfile(userId)) || buildDefaultProfile();
+    const progress = await getProgressSummary(repository, userId);
+    const records = await repository.getPracticeRecords(userId);
+    const dashboard = buildDailyDashboard({
+      profile,
+      progress,
+      records,
+      checkin,
+      scenarios,
+      timeZone: config.appTimeZone
+    });
+
+    res.json({ checkin, dashboard });
+  });
+
   app.get("*", (_req, res) => {
     res.sendFile(path.join(publicDir, "index.html"));
   });
@@ -260,4 +325,3 @@ start().catch((error) => {
   console.error("Failed to start server:", error);
   process.exit(1);
 });
-

@@ -18,6 +18,7 @@
 
 - Done: account system (register/login/JWT)
 - Done: optional PostgreSQL data layer
+- Done: daily loop dashboard (plan + streak + check-in)
 - Next: weekly report generation
 - Next: speaking quality upgrades with stronger ASR/TTS options
 
@@ -27,4 +28,3 @@
 - Region-specific English variants
 - Additional channels (Telegram/WhatsApp)
 - A/B experimentation for learning outcomes
-

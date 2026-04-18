@@ -253,6 +253,34 @@ textarea {
   line-height: 1.5;
 }
 
+.daily-meta {
+  margin-top: 0;
+  color: #274042;
+}
+
+.daily-task-list {
+  margin: 0 0 10px;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+}
+
+.daily-task-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: #f2f8f4;
+  border: 1px solid #d6e6df;
+  border-radius: 10px;
+  padding: 8px;
+}
+
+.daily-task-item small {
+  display: block;
+  color: #4a6465;
+}
+
 .voice-on {
   box-shadow: 0 0 0 3px #bc474955;
   background: var(--danger) !important;

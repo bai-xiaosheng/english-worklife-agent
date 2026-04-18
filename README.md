@@ -7,6 +7,7 @@ Phase 2 is now included:
 - Optional PostgreSQL persistence
 - Text + voice conversation practice
 - Real-time correction + post-message coaching
+- Daily loop dashboard (streak + checklist + reflection)
 
 ## Quick Start
 
@@ -24,6 +25,7 @@ Open `http://localhost:3000`.
 - `OPENAI_API_KEY`: optional, for model-based roleplay replies
 - `OPENAI_MODEL`: optional, default `gpt-4.1-mini`
 - `DEFAULT_LEVEL`: default learner level, default `A2`
+- `APP_TIMEZONE`: daily plan timezone, default `Asia/Shanghai`
 - `USE_POSTGRES`: `true` or `false`
 - `DATABASE_URL`: PostgreSQL connection string
 - `JWT_SECRET`: JWT signing secret
@@ -59,6 +61,18 @@ Auth required (`Authorization: Bearer <token>`):
 - `POST /api/v1/chat`
 - `GET /api/v1/progress/me`
 - `POST /api/v1/progress/record`
+- `GET /api/v1/daily/dashboard`
+- `POST /api/v1/daily/checkin`
+
+## Daily Self-Use Method
+
+Use the built-in loop every day:
+1. `Warm-up voice` (3 min): speak 5 simple sentences
+2. `Core scenario` (8 min): focus on one practical scenario
+3. `Weakness repair` (3 min): repeat corrected sentences
+4. `Reflection note` (1 min): write one improvement + one next fix
+
+The system tracks streak and suggests focus scenario based on your recent mistakes.
 
 ## Project Structure
 
@@ -75,4 +89,3 @@ src/
   utils/
 tests/
 ```
-

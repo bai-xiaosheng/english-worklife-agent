@@ -6,7 +6,8 @@ const state = {
   sessionReady: false,
   lastAssistantMessage: "",
   recognition: null,
-  listening: false
+  listening: false,
+  dailyDashboard: null
 };
 
 const els = {
@@ -32,7 +33,11 @@ const els = {
   coachTip: document.querySelector("#coachTip"),
   rewriteBox: document.querySelector("#rewriteBox"),
   fixList: document.querySelector("#fixList"),
-  progressStats: document.querySelector("#progressStats")
+  progressStats: document.querySelector("#progressStats"),
+  dailyMeta: document.querySelector("#dailyMeta"),
+  dailyTaskList: document.querySelector("#dailyTaskList"),
+  dailyNoteInput: document.querySelector("#dailyNoteInput"),
+  saveDailyBtn: document.querySelector("#saveDailyBtn")
 };
 
 boot();
@@ -43,7 +48,7 @@ async function boot() {
   bindEvents();
   await loadScenarios();
   await tryRestoreSession();
-  appendBubble("assistant", "Welcome! Please login, then start your English practice.");
+  appendBubble("assistant", "Welcome. Login first, then follow your daily loop.");
 }
 
 function bindEvents() {
@@ -54,6 +59,7 @@ function bindEvents() {
   els.sendBtn.addEventListener("click", sendMessage);
   els.voiceBtn.addEventListener("click", toggleVoiceInput);
   els.speakBtn.addEventListener("click", speakAssistantReply);
+  els.saveDailyBtn.addEventListener("click", saveDailyCheckin);
   els.messageInput.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       sendMessage();
@@ -72,6 +78,7 @@ async function loadScenarios() {
 async function tryRestoreSession() {
   if (!state.token) {
     updateAuthStatus();
+    renderDailyDashboard(null);
     return;
   }
 
@@ -82,20 +89,19 @@ async function tryRestoreSession() {
     hydrateProfileForm();
     updateAuthStatus();
     await refreshProgress();
+    await refreshDailyDashboard();
   } catch (_error) {
     clearAuth();
     updateAuthStatus();
+    renderDailyDashboard(null);
   }
 }
 
 async function register() {
-  const email = els.emailInput.value.trim();
-  const password = els.passwordInput.value;
-  const displayName = els.displayNameInput.value.trim();
   const payload = {
-    email,
-    password,
-    displayName,
+    email: els.emailInput.value.trim(),
+    password: els.passwordInput.value,
+    displayName: els.displayNameInput.value.trim(),
     profile: {
       level: els.levelSelect.value,
       dailyMinutes: Number(els.dailyMinutesInput.value || 15),
@@ -110,29 +116,34 @@ async function register() {
   });
 
   afterAuthSuccess(data);
-  appendBubble("assistant", "Registration completed. Let's begin your first practice.");
+  await refreshProgress();
+  await refreshDailyDashboard();
+  appendBubble("assistant", "Registration complete. Start with warm-up voice task.");
 }
 
 async function login() {
-  const email = els.emailInput.value.trim();
-  const password = els.passwordInput.value;
-
   const data = await request("/api/v1/auth/login", {
     method: "POST",
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({
+      email: els.emailInput.value.trim(),
+      password: els.passwordInput.value
+    }),
     skipAuth: true
   });
 
   afterAuthSuccess(data);
-  appendBubble("assistant", "Login successful. Keep your daily 15-minute streak.");
+  await refreshProgress();
+  await refreshDailyDashboard();
+  appendBubble("assistant", "Login successful. Keep your streak alive today.");
 }
 
 function logout() {
   clearAuth();
   state.sessionReady = false;
   updateAuthStatus();
-  els.progressStats.textContent = "请先登录并开始练习。";
-  appendBubble("assistant", "You are logged out.");
+  els.progressStats.textContent = "Login to view your progress.";
+  renderDailyDashboard(null);
+  appendBubble("assistant", "Logged out.");
 }
 
 function afterAuthSuccess(data) {
@@ -148,6 +159,7 @@ function clearAuth() {
   state.token = "";
   state.user = null;
   state.profile = null;
+  state.dailyDashboard = null;
   localStorage.removeItem("ewa_token");
 }
 
@@ -159,23 +171,21 @@ function hydrateProfileForm() {
 
 function updateAuthStatus() {
   if (!state.user) {
-    els.authStatus.textContent = "未登录";
+    els.authStatus.textContent = "Not logged in";
     return;
   }
-
   const displayName = state.user.displayName ? ` (${state.user.displayName})` : "";
-  els.authStatus.textContent = `已登录: ${state.user.email}${displayName}`;
+  els.authStatus.textContent = `Logged in: ${state.user.email}${displayName}`;
 }
 
 function ensureAuthOrThrow() {
   if (!state.token) {
-    throw new Error("请先登录后再开始练习。");
+    throw new Error("Login first.");
   }
 }
 
 async function initSession() {
   ensureAuthOrThrow();
-
   const payload = {
     profile: {
       level: els.levelSelect.value,
@@ -191,8 +201,9 @@ async function initSession() {
 
   state.profile = data.profile;
   state.sessionReady = true;
-  appendBubble("assistant", "Session ready. Start speaking English. I will coach you step by step.");
+  appendBubble("assistant", "Session ready. Continue with your core scenario task.");
   await refreshProgress();
+  await refreshDailyDashboard();
 }
 
 async function sendMessage() {
@@ -218,7 +229,7 @@ async function sendMessage() {
       })
     });
 
-    const roleplayReply = response?.assistant?.roleplayReply || "Let's continue. Please try another sentence.";
+    const roleplayReply = response?.assistant?.roleplayReply || "Let's continue. Try another sentence.";
     state.lastAssistantMessage = roleplayReply;
     appendBubble("assistant", roleplayReply);
 
@@ -229,7 +240,12 @@ async function sendMessage() {
     els.rewriteBox.textContent = feedback.rewrite || "-";
     renderFixes(feedback.quickFixes || []);
 
+    if (response.dailyHint?.nextTask) {
+      appendBubble("assistant", `Daily hint: ${response.dailyHint.nextTask}`);
+    }
+
     await refreshProgress();
+    await refreshDailyDashboard();
   } catch (error) {
     appendBubble("assistant", `Error: ${error.message}`);
   } finally {
@@ -247,10 +263,9 @@ function appendBubble(role, text) {
 
 function renderFixes(fixes) {
   els.fixList.innerHTML = "";
-
   if (!fixes.length) {
     const li = document.createElement("li");
-    li.textContent = "Nice work. No major issue detected in this sentence.";
+    li.textContent = "No major issue detected in this sentence.";
     els.fixList.appendChild(li);
     return;
   }
@@ -264,24 +279,83 @@ function renderFixes(fixes) {
 
 async function refreshProgress() {
   ensureAuthOrThrow();
-
   const data = await request("/api/v1/progress/me");
   const progress = data.progress || {};
   const topErrors = (progress.topErrors || []).map((item) => `${item.tag}(${item.count})`).join(", ");
-
   els.progressStats.innerHTML = [
-    `累计练习次数：<strong>${progress.totalPractices || 0}</strong>`,
-    `平均流畅度：<strong>${progress.avgFluency || 0}</strong>`,
-    `平均准确度：<strong>${progress.avgAccuracy || 0}</strong>`,
-    `高频错误：<strong>${topErrors || "暂无"}</strong>`
+    `Total practices: <strong>${progress.totalPractices || 0}</strong>`,
+    `Average fluency: <strong>${progress.avgFluency || 0}</strong>`,
+    `Average accuracy: <strong>${progress.avgAccuracy || 0}</strong>`,
+    `Top errors: <strong>${topErrors || "none"}</strong>`
   ].join("<br />");
+}
+
+async function refreshDailyDashboard() {
+  ensureAuthOrThrow();
+  const data = await request("/api/v1/daily/dashboard");
+  state.dailyDashboard = data.dashboard || null;
+  renderDailyDashboard(state.dailyDashboard);
+}
+
+function renderDailyDashboard(dashboard) {
+  if (!dashboard) {
+    els.dailyMeta.textContent = "Login to load your daily plan.";
+    els.dailyTaskList.innerHTML = "";
+    els.dailyNoteInput.value = "";
+    return;
+  }
+
+  const weekly = dashboard.weekly || {};
+  const plan = dashboard.plan || {};
+  els.dailyMeta.textContent = `Date ${dashboard.todayKey} | Streak ${dashboard.streakDays} days | Active days(7d) ${
+    weekly.activeDays || 0
+  } | Focus ${dashboard.focusScenarioId}`;
+
+  els.dailyTaskList.innerHTML = "";
+  const tasks = plan.tasks || [];
+  for (const task of tasks) {
+    const li = document.createElement("li");
+    li.className = "daily-task-item";
+    li.innerHTML = `
+      <input type="checkbox" data-task-id="${task.id}" ${task.completed ? "checked" : ""} />
+      <div>
+        <strong>${task.title}</strong>
+        <small>${task.tip}</small>
+      </div>
+    `;
+    els.dailyTaskList.appendChild(li);
+  }
+
+  els.dailyNoteInput.value = plan.note || "";
+}
+
+async function saveDailyCheckin() {
+  ensureAuthOrThrow();
+  if (!state.dailyDashboard?.plan?.tasks?.length) return;
+
+  const checkedIds = Array.from(els.dailyTaskList.querySelectorAll("input[type='checkbox']:checked")).map((input) =>
+    input.getAttribute("data-task-id")
+  );
+
+  const data = await request("/api/v1/daily/checkin", {
+    method: "POST",
+    body: JSON.stringify({
+      dateKey: state.dailyDashboard.todayKey,
+      completedTaskIds: checkedIds,
+      note: els.dailyNoteInput.value.trim()
+    })
+  });
+
+  state.dailyDashboard = data.dashboard || state.dailyDashboard;
+  renderDailyDashboard(state.dailyDashboard);
+  appendBubble("assistant", "Daily check-in saved.");
 }
 
 function setupVoiceRecognition() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     els.voiceBtn.disabled = true;
-    els.voiceBtn.textContent = "当前浏览器不支持语音输入";
+    els.voiceBtn.textContent = "Voice input not supported";
     return;
   }
 
@@ -298,13 +372,13 @@ function setupVoiceRecognition() {
   recognition.onend = () => {
     state.listening = false;
     els.voiceBtn.classList.remove("voice-on");
-    els.voiceBtn.textContent = "语音输入";
+    els.voiceBtn.textContent = "Voice input";
   };
 
   recognition.onerror = () => {
     state.listening = false;
     els.voiceBtn.classList.remove("voice-on");
-    els.voiceBtn.textContent = "语音输入";
+    els.voiceBtn.textContent = "Voice input";
   };
 
   state.recognition = recognition;
@@ -312,15 +386,13 @@ function setupVoiceRecognition() {
 
 function toggleVoiceInput() {
   if (!state.recognition) return;
-
   if (!state.listening) {
     state.listening = true;
     els.voiceBtn.classList.add("voice-on");
-    els.voiceBtn.textContent = "正在听...点击停止";
+    els.voiceBtn.textContent = "Listening... click to stop";
     state.recognition.start();
     return;
   }
-
   state.recognition.stop();
 }
 
@@ -355,6 +427,7 @@ async function request(url, options = {}) {
     if (response.status === 401 && !options.skipAuth) {
       clearAuth();
       updateAuthStatus();
+      renderDailyDashboard(null);
     }
     throw new Error(text || `Request failed with ${response.status}`);
   }
@@ -364,9 +437,7 @@ async function request(url, options = {}) {
 
 function registerPWA() {
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/sw.js").catch(() => {
-      // Ignore registration errors for MVP.
-    });
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
 }
 

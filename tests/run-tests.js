@@ -7,6 +7,7 @@ import {
   validateCredentials,
   verifyPassword
 } from "../src/services/authService.js";
+import { buildDailyDashboard } from "../src/services/dailyCoachService.js";
 
 async function run(name, fn) {
   try {
@@ -60,9 +61,37 @@ await run("normalizeEmail handles null safely", async () => {
   assert.equal(normalizeEmail(null), "");
 });
 
+await run("daily dashboard creates checklist and streak", async () => {
+  const now = new Date();
+  const records = [
+    {
+      createdAt: new Date(now.getTime() - 60 * 60 * 1000).toISOString(),
+      scenarioId: "team-standup",
+      errorTags: ["question-form"]
+    },
+    {
+      createdAt: new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString(),
+      scenarioId: "renting-apartment",
+      errorTags: ["question-form"]
+    }
+  ];
+  const dashboard = buildDailyDashboard({
+    profile: { dailyMinutes: 15 },
+    progress: { topErrors: [{ tag: "question-form", count: 3 }] },
+    records,
+    checkin: { completedTaskIds: ["warmup-voice"], note: "good" },
+    scenarios: [{ id: "renting-apartment" }, { id: "team-standup" }],
+    timeZone: "Asia/Shanghai"
+  });
+
+  assert.ok(dashboard.plan.tasks.length >= 3);
+  assert.equal(dashboard.focusScenarioId, "renting-apartment");
+  assert.ok(dashboard.streakDays >= 1);
+  assert.equal(dashboard.plan.note, "good");
+});
+
 if (process.exitCode === 1) {
   process.exit(1);
 }
 
 console.log("All tests passed.");
-

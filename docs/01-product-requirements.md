@@ -41,6 +41,11 @@ Help Chinese learners become functional in real overseas work-life conversations
 - In-memory fallback for quick local runs
 - PostgreSQL for persistent records
 
+6. Daily self-use loop
+- System generates daily checklist from weakness + recent activity
+- User checks completed tasks and writes 1-line reflection
+- System tracks streak days and 7-day active trend
+
 ## 5. Non-functional Requirements
 
 - Mobile-first responsive UX
@@ -54,4 +59,3 @@ Help Chinese learners become functional in real overseas work-life conversations
 - Daily average practice >= 10 minutes
 - 3-scenario completion rate >= 40%
 - User rating for practical usefulness >= 4/5
-

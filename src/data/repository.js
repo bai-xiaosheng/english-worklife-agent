@@ -9,6 +9,7 @@ function createMemoryRepository() {
   const profiles = new Map();
   const sessions = new Map();
   const practiceByUser = new Map();
+  const dailyCheckins = new Map();
 
   return {
     mode: "memory",
@@ -61,6 +62,21 @@ function createMemoryRepository() {
     },
     async getPracticeRecords(userId) {
       return [...(practiceByUser.get(userId) || [])];
+    },
+    async getDailyCheckin(userId, dateKey) {
+      return dailyCheckins.get(`${userId}::${dateKey}`) || null;
+    },
+    async upsertDailyCheckin({ userId, dateKey, completedTaskIds = [], note = "" }) {
+      const key = `${userId}::${dateKey}`;
+      const next = {
+        userId,
+        dateKey,
+        completedTaskIds: [...new Set(completedTaskIds)],
+        note: String(note || ""),
+        updatedAt: new Date().toISOString()
+      };
+      dailyCheckins.set(key, next);
+      return next;
     }
   };
 }
@@ -106,6 +122,15 @@ function createPostgresRepository() {
           error_tags JSONB NOT NULL DEFAULT '[]'::jsonb,
           source TEXT NOT NULL DEFAULT 'chat',
           created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        );
+
+        CREATE TABLE IF NOT EXISTS daily_checkins (
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          checkin_date DATE NOT NULL,
+          completed_task_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+          note TEXT NOT NULL DEFAULT '',
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (user_id, checkin_date)
         );
       `);
     },
@@ -292,6 +317,50 @@ function createPostgresRepository() {
         source: row.source,
         createdAt: row.created_at?.toISOString?.() || row.created_at
       }));
+    },
+    async getDailyCheckin(userId, dateKey) {
+      const result = await pool.query(
+        `
+          SELECT user_id, checkin_date, completed_task_ids, note, updated_at
+          FROM daily_checkins
+          WHERE user_id = $1 AND checkin_date = $2::date
+          LIMIT 1
+        `,
+        [userId, dateKey]
+      );
+
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        userId: row.user_id,
+        dateKey: row.checkin_date?.toISOString?.().slice(0, 10) || String(row.checkin_date),
+        completedTaskIds: row.completed_task_ids || [],
+        note: row.note || "",
+        updatedAt: row.updated_at?.toISOString?.() || row.updated_at
+      };
+    },
+    async upsertDailyCheckin({ userId, dateKey, completedTaskIds = [], note = "" }) {
+      const result = await pool.query(
+        `
+          INSERT INTO daily_checkins (user_id, checkin_date, completed_task_ids, note, updated_at)
+          VALUES ($1, $2::date, $3::jsonb, $4, NOW())
+          ON CONFLICT (user_id, checkin_date)
+          DO UPDATE SET
+            completed_task_ids = EXCLUDED.completed_task_ids,
+            note = EXCLUDED.note,
+            updated_at = NOW()
+          RETURNING user_id, checkin_date, completed_task_ids, note, updated_at
+        `,
+        [userId, dateKey, JSON.stringify([...new Set(completedTaskIds)]), String(note || "")]
+      );
+      const row = result.rows[0];
+      return {
+        userId: row.user_id,
+        dateKey: row.checkin_date?.toISOString?.().slice(0, 10) || String(row.checkin_date),
+        completedTaskIds: row.completed_task_ids || [],
+        note: row.note || "",
+        updatedAt: row.updated_at?.toISOString?.() || row.updated_at
+      };
     }
   };
 }
@@ -307,4 +376,3 @@ export async function createRepository() {
   await repository.init();
   return repository;
 }
-

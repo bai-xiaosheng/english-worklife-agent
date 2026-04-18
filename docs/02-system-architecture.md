@@ -9,6 +9,7 @@ Mobile Web/PWA
      -> Conversation Service (LLM + fallback)
      -> Feedback Service (rule-based coaching)
      -> Progress Service (scores + error tags)
+     -> Daily Coach Service (plan/streak/check-in)
      -> Repository Layer
         -> PostgreSQL (optional, USE_POSTGRES=true)
         -> In-memory fallback
@@ -22,6 +23,7 @@ Mobile Web/PWA
 - Voice input (`SpeechRecognition`)
 - Voice output (`speechSynthesis`)
 - Progress dashboard
+- Daily loop dashboard and check-in panel
 
 2. Backend (`src/server.js`)
 - Public routes: health, scenarios, auth register/login
@@ -38,6 +40,7 @@ Mobile Web/PWA
 - `agentService.js`: roleplay reply generation
 - `feedbackService.js`: correction, rewrite, scores
 - `progressService.js`: summary aggregation
+- `dailyCoachService.js`: daily plan and streak logic
 
 ## 3. Data Model
 
@@ -53,6 +56,9 @@ Mobile Web/PWA
 `practice_records`
 - `id`, `user_id`, `scenario_id`, `fluency_score`, `accuracy_score`, `error_tags(jsonb)`, `source`, `created_at`
 
+`daily_checkins`
+- `user_id`, `checkin_date`, `completed_task_ids(jsonb)`, `note`, `updated_at`
+
 ## 4. API Design
 
 Public:
@@ -67,4 +73,5 @@ Protected:
 3. `POST /api/v1/chat`
 4. `GET /api/v1/progress/me`
 5. `POST /api/v1/progress/record`
-
+6. `GET /api/v1/daily/dashboard`
+7. `POST /api/v1/daily/checkin`

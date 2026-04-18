@@ -5,6 +5,7 @@ dotenv.config();
 export const config = {
   port: Number(process.env.PORT || 3000),
   defaultLevel: process.env.DEFAULT_LEVEL || "A2",
+  appTimeZone: process.env.APP_TIMEZONE || "Asia/Shanghai",
   usePostgres: String(process.env.USE_POSTGRES || "false").toLowerCase() === "true",
   databaseUrl: process.env.DATABASE_URL || "",
   auth: {
