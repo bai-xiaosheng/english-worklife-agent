@@ -9,6 +9,11 @@ import {
 } from "../src/services/authService.js";
 import { buildDailyDashboard } from "../src/services/dailyCoachService.js";
 import { buildWeeklyReport } from "../src/services/weeklyCoachService.js";
+import {
+  parseLearningCommand,
+  formatImproveMessage,
+  formatPlanMessage
+} from "../src/services/qqLearningBridgeService.js";
 
 async function run(name, fn) {
   try {
@@ -130,9 +135,67 @@ await run("weekly report summarizes stats and next plan", async () => {
   assert.ok(typeof report.summary === "string");
 });
 
+await run("qq learning command parser handles goal and practice", async () => {
+  const goal = parseLearningCommand("/learn goal Speak clearly in meetings");
+  const practice = parseLearningCommand("I will share project updates in standup.");
+  assert.equal(goal.type, "goal");
+  assert.equal(goal.payload, "Speak clearly in meetings");
+  assert.equal(practice.type, "practice");
+});
+
+await run("qq learning formatter returns plan text", async () => {
+  const text = formatPlanMessage({
+    learningState: { goal: "Work-life communication" },
+    dashboard: {
+      todayKey: "2026-04-18",
+      streakDays: 3,
+      focusScenarioId: "team-standup",
+      topErrorTag: "word-order",
+      plan: {
+        tasks: [
+          { id: "warmup-voice", title: "Warm-up", completed: false },
+          { id: "repair-weakness", title: "Repair", completed: true }
+        ]
+      }
+    }
+  });
+  assert.ok(text.includes("Goal:"));
+  assert.ok(text.includes("Focus scenario:"));
+});
+
+await run("qq learning command parser supports Chinese aliases", async () => {
+  const goal = parseLearningCommand("学习目标 海外工作沟通");
+  const content = parseLearningCommand("学习内容 会议沟通和small talk");
+  const plan = parseLearningCommand("今日计划");
+  const checkin = parseLearningCommand("打卡 warmup-voice,repair-weakness|今天状态不错");
+
+  assert.equal(goal.type, "goal");
+  assert.equal(content.type, "content");
+  assert.equal(plan.type, "plan");
+  assert.equal(checkin.type, "checkin");
+  assert.deepEqual(checkin.payload.completedTaskIds, ["warmup-voice", "repair-weakness"]);
+});
+
+await run("qq learning improve formatter includes action and priority", async () => {
+  const text = formatImproveMessage({
+    learningState: { goal: "Work and life communication" },
+    progress: { topErrors: [{ tag: "question-form", count: 4 }] },
+    dashboard: { focusScenarioId: "team-standup" },
+    weeklyReport: {
+      nextWeekPlan: [
+        { title: "Loop", action: "Do 15 min daily" },
+        { title: "Repair", action: "Fix question-form with 5 examples" }
+      ]
+    }
+  });
+
+  assert.ok(text.includes("Improvement suggestions:"));
+  assert.ok(text.includes("question-form"));
+  assert.ok(text.includes("Action now:"));
+});
+
 if (process.exitCode === 1) {
   process.exit(1);
 }
 
 console.log("All tests passed.");
-

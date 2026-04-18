@@ -12,6 +12,19 @@ import { getProgressSummary, recordPractice } from "./services/progressService.j
 import { buildDailyDashboard, getTodayKey } from "./services/dailyCoachService.js";
 import { buildWeeklyReport } from "./services/weeklyCoachService.js";
 import {
+  buildHelpMessage,
+  formatCheckinMessage,
+  formatGoalMessage,
+  formatImproveMessage,
+  formatLearningStateMessage,
+  formatPlanMessage,
+  formatPracticeMessage,
+  formatReviewMessage,
+  formatStatusMessage,
+  formatWeeklyMessage,
+  parseLearningCommand
+} from "./services/qqLearningBridgeService.js";
+import {
   hashPassword,
   normalizeEmail,
   publicUser,
@@ -49,6 +62,102 @@ async function createApp() {
     next();
   });
   app.use(express.static(publicDir));
+
+  async function computeLearningContext(userId) {
+    const profile = (await repository.getProfile(userId)) || buildDefaultProfile();
+    const progress = await getProgressSummary(repository, userId);
+    const records = await repository.getPracticeRecords(userId);
+    const learningState = (await repository.getLearningState(userId)) || {
+      userId,
+      goal: "",
+      contentFocus: "",
+      planPreference: ""
+    };
+    const todayKey = getTodayKey(config.appTimeZone);
+    const checkin = await repository.getDailyCheckin(userId, todayKey);
+    const dailyDashboard = buildDailyDashboard({
+      profile,
+      progress,
+      records,
+      checkin,
+      scenarios,
+      timeZone: config.appTimeZone
+    });
+    const weeklyReport = buildWeeklyReport({
+      records,
+      progress,
+      profile,
+      dailyDashboard,
+      timeZone: config.appTimeZone
+    });
+
+    return {
+      profile,
+      progress,
+      records,
+      learningState,
+      todayKey,
+      checkin,
+      dailyDashboard,
+      weeklyReport
+    };
+  }
+
+  async function ensureBridgeUser({ source, externalUserId, displayName = "" }) {
+    const existingIdentity = await repository.getExternalIdentity(source, externalUserId);
+    if (existingIdentity?.userId) {
+      const existingUser = await repository.getUserById(existingIdentity.userId);
+      if (existingUser) return existingUser;
+    }
+
+    const syntheticEmail = `${source}_${externalUserId}@local.bot`;
+    let user = await repository.getUserByEmail(syntheticEmail);
+
+    if (!user) {
+      const passwordHash = await hashPassword(config.bot.qqBridgePassword);
+      user = await repository.createUser({
+        email: syntheticEmail,
+        passwordHash,
+        displayName: displayName || `${source}-${externalUserId}`
+      });
+      await repository.saveProfile(user.id, buildDefaultProfile());
+      await repository.upsertSession(user.id, { history: [] });
+    }
+
+    await repository.upsertExternalIdentity({
+      source,
+      externalUserId,
+      userId: user.id,
+      meta: {
+        displayName: displayName || ""
+      }
+    });
+
+    return user;
+  }
+
+  function inferContentFocus(goalText) {
+    const text = String(goalText || "").toLowerCase();
+    if (text.includes("interview")) return "interview and self-introduction";
+    if (text.includes("meeting") || text.includes("work")) return "workplace conversation";
+    if (text.includes("life") || text.includes("daily")) return "daily life communication";
+    if (text.includes("travel")) return "travel and service scenarios";
+    return "overseas work-life communication";
+  }
+
+  function inferPlanPreference(goalText) {
+    const text = String(goalText || "").toLowerCase();
+    if (text.includes("speaking") || text.includes("口语")) return "voice-first drills";
+    if (text.includes("writing") || text.includes("写作")) return "rewrite-first drills";
+    return "balanced daily loop";
+  }
+
+  function buildReviewNote(review = {}) {
+    const wins = String(review.wins || "").trim();
+    const blocker = String(review.blocker || "").trim();
+    const nextAction = String(review.nextAction || "").trim();
+    return [`wins=${wins || "-"}`, `blocker=${blocker || "-"}`, `next=${nextAction || "-"}`].join("; ");
+  }
 
   app.get("/api/health", (_req, res) => {
     res.json({
@@ -339,6 +448,273 @@ async function createApp() {
     });
 
     res.json({ report });
+  });
+
+  app.post("/api/v1/integrations/qqbot/message", async (req, res) => {
+    const expectedSecret = config.bot.qqBridgeSecret;
+    const providedSecret = String(req.headers["x-bot-secret"] || "");
+    if (expectedSecret && providedSecret !== expectedSecret) {
+      res.status(401).json({ error: "Unauthorized integration request." });
+      return;
+    }
+
+    const source = String(req.body?.source || "qqbot");
+    const externalUserId = String(
+      req.body?.externalUserId || req.body?.userId || req.body?.senderId || ""
+    ).trim();
+    const displayName = String(req.body?.displayName || "").trim();
+    const text = String(req.body?.text || "").trim();
+
+    if (!externalUserId || !text) {
+      res.status(400).json({ error: "externalUserId and text are required." });
+      return;
+    }
+
+    const user = await ensureBridgeUser({ source, externalUserId, displayName });
+    const command = parseLearningCommand(text);
+    let context = await computeLearningContext(user.id);
+
+    if (command.type === "help" || command.type === "empty") {
+      res.json({
+        type: "help",
+        reply: buildHelpMessage(),
+        user: publicUser(user)
+      });
+      return;
+    }
+
+    if (command.type === "goal") {
+      const goal = String(command.payload || "").trim();
+      if (!goal) {
+        res.json({
+          type: "goal",
+          reply: "Usage: /learn goal <your target>",
+          user: publicUser(user)
+        });
+        return;
+      }
+
+      const learningState = await repository.upsertLearningState(user.id, {
+        goal,
+        contentFocus: inferContentFocus(goal),
+        planPreference: inferPlanPreference(goal)
+      });
+
+      res.json({
+        type: "goal",
+        reply: formatGoalMessage(learningState),
+        user: publicUser(user),
+        learningState
+      });
+      return;
+    }
+
+    if (command.type === "content") {
+      const contentFocus = String(command.payload || "").trim();
+      if (!contentFocus) {
+        res.json({
+          type: "content",
+          reply: "Usage: /learn content <focus area>",
+          user: publicUser(user)
+        });
+        return;
+      }
+      const learningState = await repository.upsertLearningState(user.id, {
+        contentFocus
+      });
+      res.json({
+        type: "content",
+        reply: formatLearningStateMessage(learningState),
+        user: publicUser(user),
+        learningState
+      });
+      return;
+    }
+
+    if (command.type === "preference") {
+      const planPreference = String(command.payload || "").trim();
+      if (!planPreference) {
+        res.json({
+          type: "preference",
+          reply: "Usage: /learn preference <plan style>",
+          user: publicUser(user)
+        });
+        return;
+      }
+      const learningState = await repository.upsertLearningState(user.id, {
+        planPreference
+      });
+      res.json({
+        type: "preference",
+        reply: formatLearningStateMessage(learningState),
+        user: publicUser(user),
+        learningState
+      });
+      return;
+    }
+
+    if (command.type === "plan") {
+      res.json({
+        type: "plan",
+        reply: formatPlanMessage({
+          dashboard: context.dailyDashboard,
+          learningState: context.learningState
+        }),
+        user: publicUser(user),
+        dashboard: context.dailyDashboard
+      });
+      return;
+    }
+
+    if (command.type === "status") {
+      res.json({
+        type: "status",
+        reply: formatStatusMessage({
+          progress: context.progress,
+          learningState: context.learningState,
+          dashboard: context.dailyDashboard
+        }),
+        user: publicUser(user),
+        progress: context.progress
+      });
+      return;
+    }
+
+    if (command.type === "weekly") {
+      res.json({
+        type: "weekly",
+        reply: formatWeeklyMessage(context.weeklyReport),
+        user: publicUser(user),
+        report: context.weeklyReport
+      });
+      return;
+    }
+
+    if (command.type === "improve") {
+      res.json({
+        type: "improve",
+        reply: formatImproveMessage({
+          progress: context.progress,
+          dashboard: context.dailyDashboard,
+          weeklyReport: context.weeklyReport,
+          learningState: context.learningState
+        }),
+        user: publicUser(user)
+      });
+      return;
+    }
+
+    if (command.type === "checkin") {
+      const payload = command.payload || { completedTaskIds: [], note: "" };
+      const checkin = await repository.upsertDailyCheckin({
+        userId: user.id,
+        dateKey: context.todayKey,
+        completedTaskIds: payload.completedTaskIds || [],
+        note: payload.note || ""
+      });
+      context = await computeLearningContext(user.id);
+      res.json({
+        type: "checkin",
+        reply: formatCheckinMessage({
+          checkin,
+          dashboard: context.dailyDashboard
+        }),
+        user: publicUser(user),
+        checkin
+      });
+      return;
+    }
+
+    if (command.type === "review") {
+      const review = command.payload || { wins: "", blocker: "", nextAction: "" };
+      const existingCheckin = await repository.getDailyCheckin(user.id, context.todayKey);
+      await repository.upsertDailyCheckin({
+        userId: user.id,
+        dateKey: context.todayKey,
+        completedTaskIds: existingCheckin?.completedTaskIds || [],
+        note: buildReviewNote(review)
+      });
+      context = await computeLearningContext(user.id);
+      res.json({
+        type: "review",
+        reply: formatReviewMessage({
+          review,
+          dashboard: context.dailyDashboard
+        }),
+        user: publicUser(user)
+      });
+      return;
+    }
+
+    if (command.type === "practice") {
+      const message = String(command.payload || "").trim();
+      if (!message) {
+        res.json({
+          type: "practice",
+          reply: "Please send one English sentence to practice.",
+          user: publicUser(user)
+        });
+        return;
+      }
+
+      const scenarioId = context.dailyDashboard.focusScenarioId || "team-standup";
+      const scenario = getScenarioById(scenarioId) || scenarios[0];
+      const session = (await repository.getSession(user.id)) || { history: [] };
+      const feedback = analyzeMessage(message, context.profile.level);
+      const roleplay = await generateRoleplayReply({
+        scenario,
+        profile: context.profile,
+        useChineseHint: true,
+        history: session.history.slice(-8),
+        userMessage: message
+      });
+
+      const nowIso = new Date().toISOString();
+      const nextHistory = [
+        ...session.history,
+        { role: "user", text: message, ts: nowIso },
+        { role: "assistant", text: roleplay.text, ts: nowIso }
+      ].slice(-20);
+
+      await repository.upsertSession(user.id, {
+        history: nextHistory
+      });
+
+      await recordPractice(repository, {
+        userId: user.id,
+        scenarioId: scenario.id,
+        fluencyScore: feedback.fluencyScore,
+        accuracyScore: feedback.accuracyScore,
+        errorTags: feedback.errorTags,
+        source: "qqbot"
+      });
+
+      context = await computeLearningContext(user.id);
+      const assistantPayload = {
+        roleplayReply: roleplay.text
+      };
+      const dailyHint = {
+        nextTask: context.dailyDashboard.plan.tasks.find((item) => !item.completed)?.title || "Daily tasks completed"
+      };
+
+      res.json({
+        type: "practice",
+        reply: formatPracticeMessage({
+          assistant: assistantPayload,
+          feedback,
+          dailyHint
+        }),
+        user: publicUser(user),
+        feedback
+      });
+      return;
+    }
+
+    res.json({
+      type: "help",
+      reply: buildHelpMessage(),
+      user: publicUser(user)
+    });
   });
 
   app.get("*", (_req, res) => {

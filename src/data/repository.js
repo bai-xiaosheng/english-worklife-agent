@@ -10,6 +10,8 @@ function createMemoryRepository() {
   const sessions = new Map();
   const practiceByUser = new Map();
   const dailyCheckins = new Map();
+  const externalIdentityStore = new Map();
+  const learningStateStore = new Map();
 
   return {
     mode: "memory",
@@ -62,6 +64,42 @@ function createMemoryRepository() {
     },
     async getPracticeRecords(userId) {
       return [...(practiceByUser.get(userId) || [])];
+    },
+    async getExternalIdentity(source, externalUserId) {
+      return externalIdentityStore.get(`${source}::${externalUserId}`) || null;
+    },
+    async upsertExternalIdentity({ source, externalUserId, userId, meta = {} }) {
+      const key = `${source}::${externalUserId}`;
+      const next = {
+        source,
+        externalUserId,
+        userId,
+        meta,
+        updatedAt: new Date().toISOString()
+      };
+      externalIdentityStore.set(key, next);
+      return next;
+    },
+    async getLearningState(userId) {
+      return learningStateStore.get(userId) || null;
+    },
+    async upsertLearningState(userId, patch = {}) {
+      const current = learningStateStore.get(userId) || {
+        userId,
+        goal: "",
+        contentFocus: "",
+        planPreference: "",
+        updatedAt: new Date().toISOString()
+      };
+
+      const next = {
+        ...current,
+        ...patch,
+        userId,
+        updatedAt: new Date().toISOString()
+      };
+      learningStateStore.set(userId, next);
+      return next;
     },
     async getDailyCheckin(userId, dateKey) {
       return dailyCheckins.get(`${userId}::${dateKey}`) || null;
@@ -131,6 +169,23 @@ function createPostgresRepository() {
           note TEXT NOT NULL DEFAULT '',
           updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
           PRIMARY KEY (user_id, checkin_date)
+        );
+
+        CREATE TABLE IF NOT EXISTS external_identities (
+          source TEXT NOT NULL,
+          external_user_id TEXT NOT NULL,
+          user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+          PRIMARY KEY (source, external_user_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS learning_states (
+          user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+          goal TEXT NOT NULL DEFAULT '',
+          content_focus TEXT NOT NULL DEFAULT '',
+          plan_preference TEXT NOT NULL DEFAULT '',
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
         );
       `);
     },
@@ -317,6 +372,103 @@ function createPostgresRepository() {
         source: row.source,
         createdAt: row.created_at?.toISOString?.() || row.created_at
       }));
+    },
+    async getExternalIdentity(source, externalUserId) {
+      const result = await pool.query(
+        `
+          SELECT source, external_user_id, user_id, meta, updated_at
+          FROM external_identities
+          WHERE source = $1 AND external_user_id = $2
+          LIMIT 1
+        `,
+        [source, externalUserId]
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        source: row.source,
+        externalUserId: row.external_user_id,
+        userId: row.user_id,
+        meta: row.meta || {},
+        updatedAt: row.updated_at?.toISOString?.() || row.updated_at
+      };
+    },
+    async upsertExternalIdentity({ source, externalUserId, userId, meta = {} }) {
+      const result = await pool.query(
+        `
+          INSERT INTO external_identities (source, external_user_id, user_id, meta, updated_at)
+          VALUES ($1, $2, $3, $4::jsonb, NOW())
+          ON CONFLICT (source, external_user_id)
+          DO UPDATE SET
+            user_id = EXCLUDED.user_id,
+            meta = EXCLUDED.meta,
+            updated_at = NOW()
+          RETURNING source, external_user_id, user_id, meta, updated_at
+        `,
+        [source, externalUserId, userId, JSON.stringify(meta || {})]
+      );
+      const row = result.rows[0];
+      return {
+        source: row.source,
+        externalUserId: row.external_user_id,
+        userId: row.user_id,
+        meta: row.meta || {},
+        updatedAt: row.updated_at?.toISOString?.() || row.updated_at
+      };
+    },
+    async getLearningState(userId) {
+      const result = await pool.query(
+        `
+          SELECT user_id, goal, content_focus, plan_preference, updated_at
+          FROM learning_states
+          WHERE user_id = $1
+          LIMIT 1
+        `,
+        [userId]
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        userId: row.user_id,
+        goal: row.goal || "",
+        contentFocus: row.content_focus || "",
+        planPreference: row.plan_preference || "",
+        updatedAt: row.updated_at?.toISOString?.() || row.updated_at
+      };
+    },
+    async upsertLearningState(userId, patch = {}) {
+      const current = (await this.getLearningState(userId)) || {
+        goal: "",
+        contentFocus: "",
+        planPreference: ""
+      };
+      const next = {
+        goal: patch.goal ?? current.goal ?? "",
+        contentFocus: patch.contentFocus ?? current.contentFocus ?? "",
+        planPreference: patch.planPreference ?? current.planPreference ?? ""
+      };
+      const result = await pool.query(
+        `
+          INSERT INTO learning_states (user_id, goal, content_focus, plan_preference, updated_at)
+          VALUES ($1, $2, $3, $4, NOW())
+          ON CONFLICT (user_id)
+          DO UPDATE SET
+            goal = EXCLUDED.goal,
+            content_focus = EXCLUDED.content_focus,
+            plan_preference = EXCLUDED.plan_preference,
+            updated_at = NOW()
+          RETURNING user_id, goal, content_focus, plan_preference, updated_at
+        `,
+        [userId, next.goal, next.contentFocus, next.planPreference]
+      );
+      const row = result.rows[0];
+      return {
+        userId: row.user_id,
+        goal: row.goal || "",
+        contentFocus: row.content_focus || "",
+        planPreference: row.plan_preference || "",
+        updatedAt: row.updated_at?.toISOString?.() || row.updated_at
+      };
     },
     async getDailyCheckin(userId, dateKey) {
       const result = await pool.query(

@@ -33,6 +33,8 @@ Open `http://localhost:3000`.
 - `DATABASE_URL`: PostgreSQL connection string
 - `JWT_SECRET`: JWT signing secret
 - `JWT_EXPIRES_IN`: JWT expiry, default `7d`
+- `QQBOT_BRIDGE_SECRET`: shared secret for QQ bot bridge endpoint (optional but recommended)
+- `QQBOT_BRIDGE_PASSWORD`: bootstrap password used for auto-created QQ bridge users
 
 ## Docker PostgreSQL (Recommended)
 
@@ -91,6 +93,9 @@ Auth required (`Authorization: Bearer <token>`):
 - `POST /api/v1/daily/checkin`
 - `GET /api/v1/weekly/report`
 
+Integration:
+- `POST /api/v1/integrations/qqbot/message` (`x-bot-secret` required when `QQBOT_BRIDGE_SECRET` is set)
+
 ## Daily Self-Use Method
 
 Use the built-in loop every day:
@@ -108,6 +113,49 @@ Open the weekly panel to generate:
 2. fluency and accuracy trend vs previous week
 3. strengths and risk alerts
 4. next-week action plan tailored to your top error tags
+
+## QQBot + Skill Integration
+
+Skill files in this repo:
+
+```text
+openclaw-skills/qq-english-learning-loop
+```
+
+Install skill into your running OpenClaw container:
+
+```powershell
+pwsh ./tools/install_openclaw_skill.ps1
+```
+
+Bridge script usage (inside OpenClaw/container):
+
+```bash
+bash /root/.openclaw/workspace/skills/qq-english-learning-loop/scripts/qq_learning_bridge.sh \
+  --user "qq-user-001" \
+  --text "/learn plan"
+```
+
+Supported commands:
+- `/learn goal <text>`
+- `/learn content <focus>`
+- `/learn preference <style>`
+- `/learn plan`
+- `/learn do <english sentence>` (or direct English sentence)
+- `/learn checkin task1,task2|note`
+- `/learn review win|blocker|nextAction`
+- `/learn week`
+- `/learn status`
+- `/learn improve`
+
+Chinese aliases are also supported, for example:
+- `学习目标 ...`
+- `学习内容 ...`
+- `计划偏好 ...`
+- `今日计划`
+- `打卡 task1,task2|备注`
+- `复盘 收获|阻碍|下一步`
+- `改进建议`
 
 ## Project Structure
 

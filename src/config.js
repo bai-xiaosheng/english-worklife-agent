@@ -12,6 +12,10 @@ export const config = {
     jwtSecret: process.env.JWT_SECRET || "dev-secret-change-me",
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d"
   },
+  bot: {
+    qqBridgeSecret: process.env.QQBOT_BRIDGE_SECRET || "",
+    qqBridgePassword: process.env.QQBOT_BRIDGE_PASSWORD || "qqbot-default-password"
+  },
   openai: {
     apiKey: process.env.OPENAI_API_KEY || "",
     model: process.env.OPENAI_MODEL || "gpt-4.1-mini"
