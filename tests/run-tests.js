@@ -8,6 +8,7 @@ import {
   verifyPassword
 } from "../src/services/authService.js";
 import { buildDailyDashboard } from "../src/services/dailyCoachService.js";
+import { buildWeeklyReport } from "../src/services/weeklyCoachService.js";
 
 async function run(name, fn) {
   try {
@@ -21,7 +22,7 @@ async function run(name, fn) {
 }
 
 await run("flags mixed Chinese content", async () => {
-  const result = analyzeMessage("I think this plan is good, 我也认可", "A2");
+  const result = analyzeMessage("I think this plan is good, 我也认同", "A2");
   assert.ok(result.errorTags.includes("native-language-mix"));
   assert.ok(result.quickFixes.length >= 1);
 });
@@ -90,8 +91,48 @@ await run("daily dashboard creates checklist and streak", async () => {
   assert.equal(dashboard.plan.note, "good");
 });
 
+await run("weekly report summarizes stats and next plan", async () => {
+  const now = new Date();
+  const records = [
+    {
+      createdAt: now.toISOString(),
+      scenarioId: "team-standup",
+      fluencyScore: 77,
+      accuracyScore: 81
+    },
+    {
+      createdAt: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+      scenarioId: "team-standup",
+      fluencyScore: 75,
+      accuracyScore: 79
+    }
+  ];
+
+  const dailyDashboard = buildDailyDashboard({
+    profile: { dailyMinutes: 15 },
+    progress: { topErrors: [{ tag: "word-order", count: 2 }] },
+    records,
+    checkin: null,
+    scenarios: [{ id: "team-standup" }],
+    timeZone: "Asia/Shanghai"
+  });
+
+  const report = buildWeeklyReport({
+    records,
+    progress: { topErrors: [{ tag: "word-order", count: 2 }] },
+    profile: { dailyMinutes: 15 },
+    dailyDashboard,
+    timeZone: "Asia/Shanghai"
+  });
+
+  assert.ok(report.stats.totalPractices >= 1);
+  assert.ok(report.nextWeekPlan.length >= 3);
+  assert.ok(typeof report.summary === "string");
+});
+
 if (process.exitCode === 1) {
   process.exit(1);
 }
 
 console.log("All tests passed.");
+

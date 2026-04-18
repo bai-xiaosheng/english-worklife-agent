@@ -8,6 +8,7 @@ Phase 2 is now included:
 - Text + voice conversation practice
 - Real-time correction + post-message coaching
 - Daily loop dashboard (streak + checklist + reflection)
+- Weekly report (trends + strengths + risks + next-week plan)
 
 ## Quick Start
 
@@ -63,6 +64,7 @@ Auth required (`Authorization: Bearer <token>`):
 - `POST /api/v1/progress/record`
 - `GET /api/v1/daily/dashboard`
 - `POST /api/v1/daily/checkin`
+- `GET /api/v1/weekly/report`
 
 ## Daily Self-Use Method
 
@@ -73,6 +75,14 @@ Use the built-in loop every day:
 4. `Reflection note` (1 min): write one improvement + one next fix
 
 The system tracks streak and suggests focus scenario based on your recent mistakes.
+
+## Weekly Self-Review
+
+Open the weekly panel to generate:
+1. weekly totals (practice count, active days, estimated minutes)
+2. fluency and accuracy trend vs previous week
+3. strengths and risk alerts
+4. next-week action plan tailored to your top error tags
 
 ## Project Structure
 

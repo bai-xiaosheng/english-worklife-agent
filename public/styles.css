@@ -281,6 +281,10 @@ textarea {
   color: #4a6465;
 }
 
+.weekly-panel h3 {
+  margin-bottom: 6px;
+}
+
 .voice-on {
   box-shadow: 0 0 0 3px #bc474955;
   background: var(--danger) !important;

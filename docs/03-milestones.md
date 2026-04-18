@@ -19,7 +19,7 @@
 - Done: account system (register/login/JWT)
 - Done: optional PostgreSQL data layer
 - Done: daily loop dashboard (plan + streak + check-in)
-- Next: weekly report generation
+- Done: weekly report generation (trends + next-week plan)
 - Next: speaking quality upgrades with stronger ASR/TTS options
 
 ## Phase 3 - Growth

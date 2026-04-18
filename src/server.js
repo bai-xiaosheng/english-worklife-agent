@@ -10,6 +10,7 @@ import { analyzeMessage } from "./services/feedbackService.js";
 import { generateRoleplayReply } from "./services/agentService.js";
 import { getProgressSummary, recordPractice } from "./services/progressService.js";
 import { buildDailyDashboard, getTodayKey } from "./services/dailyCoachService.js";
+import { buildWeeklyReport } from "./services/weeklyCoachService.js";
 import {
   hashPassword,
   normalizeEmail,
@@ -303,6 +304,33 @@ async function createApp() {
     });
 
     res.json({ checkin, dashboard });
+  });
+
+  app.get("/api/v1/weekly/report", requireAuth, async (req, res) => {
+    const userId = req.auth.userId;
+    const profile = (await repository.getProfile(userId)) || buildDefaultProfile();
+    const progress = await getProgressSummary(repository, userId);
+    const records = await repository.getPracticeRecords(userId);
+    const todayKey = getTodayKey(config.appTimeZone);
+    const checkin = await repository.getDailyCheckin(userId, todayKey);
+    const dailyDashboard = buildDailyDashboard({
+      profile,
+      progress,
+      records,
+      checkin,
+      scenarios,
+      timeZone: config.appTimeZone
+    });
+
+    const report = buildWeeklyReport({
+      records,
+      progress,
+      profile,
+      dailyDashboard,
+      timeZone: config.appTimeZone
+    });
+
+    res.json({ report });
   });
 
   app.get("*", (_req, res) => {

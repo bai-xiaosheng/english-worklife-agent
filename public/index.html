@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -21,41 +21,41 @@
     <main class="app">
       <header class="hero">
         <p class="eyebrow">Daily 15 Minutes</p>
-        <h1>英语工作生活沟通训练</h1>
+        <h1>English Worklife Conversation Training</h1>
         <p class="subtitle">
-          面向海外工作生活。登录后可持续追踪你的学习轨迹，支持文字与语音练习。
+          Built for personal daily use. Practice by text or voice, then track your streak and weekly improvements.
         </p>
       </header>
 
       <section class="panel auth-panel">
-        <h2>账号登录</h2>
-        <div id="authStatus" class="auth-status">未登录</div>
+        <h2>Account</h2>
+        <div id="authStatus" class="auth-status">Not logged in</div>
         <div class="grid">
           <label>
-            邮箱
+            Email
             <input id="emailInput" type="email" placeholder="you@example.com" />
           </label>
           <label>
-            密码
-            <input id="passwordInput" type="password" placeholder="至少8位" />
+            Password
+            <input id="passwordInput" type="password" placeholder="At least 8 characters" />
           </label>
           <label>
-            昵称（注册时可选）
-            <input id="displayNameInput" type="text" placeholder="例如 Alex" />
+            Display name (optional)
+            <input id="displayNameInput" type="text" placeholder="Alex" />
           </label>
         </div>
         <div class="auth-actions">
-          <button id="registerBtn" class="btn secondary" type="button">注册</button>
-          <button id="loginBtn" class="btn primary" type="button">登录</button>
-          <button id="logoutBtn" class="btn ghost" type="button">退出</button>
+          <button id="registerBtn" class="btn secondary" type="button">Register</button>
+          <button id="loginBtn" class="btn primary" type="button">Login</button>
+          <button id="logoutBtn" class="btn ghost" type="button">Logout</button>
         </div>
       </section>
 
       <section class="panel setup-panel">
-        <h2>学习设置</h2>
+        <h2>Practice Setup</h2>
         <div class="grid">
           <label>
-            英语级别
+            Level
             <select id="levelSelect">
               <option value="A1">A1</option>
               <option value="A2" selected>A2</option>
@@ -64,32 +64,32 @@
             </select>
           </label>
           <label>
-            每日时长（分钟）
+            Daily minutes
             <input id="dailyMinutesInput" type="number" min="10" max="60" value="15" />
           </label>
           <label>
-            练习场景
+            Scenario
             <select id="scenarioSelect"></select>
           </label>
           <label class="toggle-wrap">
-            中文提示
+            Chinese hint
             <input id="chineseHintToggle" type="checkbox" checked />
           </label>
         </div>
-        <button id="initBtn" class="btn primary">开始今天的练习</button>
+        <button id="initBtn" class="btn primary">Start Today Session</button>
       </section>
 
       <section class="panel chat-panel">
         <div class="chat-head">
-          <h2>对话训练</h2>
-          <button id="speakBtn" class="btn secondary" type="button">朗读 AI 回复</button>
+          <h2>Conversation</h2>
+          <button id="speakBtn" class="btn secondary" type="button">Speak AI Reply</button>
         </div>
         <div id="chatWindow" class="chat-window"></div>
         <div class="composer">
-          <textarea id="messageInput" rows="3" placeholder="输入英文句子，或点击语音输入..."></textarea>
+          <textarea id="messageInput" rows="3" placeholder="Type in English, or use voice input..."></textarea>
           <div class="composer-actions">
-            <button id="voiceBtn" class="btn ghost" type="button">语音输入</button>
-            <button id="sendBtn" class="btn primary" type="button">发送</button>
+            <button id="voiceBtn" class="btn ghost" type="button">Voice Input</button>
+            <button id="sendBtn" class="btn primary" type="button">Send</button>
           </div>
         </div>
       </section>
@@ -105,29 +105,51 @@
         <button id="saveDailyBtn" class="btn secondary" type="button">Save Daily Check-in</button>
       </section>
 
-      <section class="panel feedback-panel">
-        <h2>即时反馈</h2>
-        <div id="scoreRow" class="score-row">
-          <span>流畅度: <strong id="fluencyScore">-</strong></span>
-          <span>准确度: <strong id="accuracyScore">-</strong></span>
+      <section class="panel weekly-panel">
+        <div class="chat-head">
+          <h2>Weekly Review</h2>
+          <button id="refreshWeeklyBtn" class="btn secondary" type="button">Refresh Report</button>
         </div>
-        <p id="coachTip" class="coach-tip">发送一句英文后，这里会给你反馈。</p>
+        <p id="weeklySummary" class="daily-meta">Login to generate weekly report.</p>
+        <div id="weeklyStats" class="progress-stats"></div>
         <div>
-          <h3>改写建议</h3>
+          <h3>Strengths</h3>
+          <ul id="weeklyStrengthList" class="fix-list"></ul>
+        </div>
+        <div>
+          <h3>Risks</h3>
+          <ul id="weeklyRiskList" class="fix-list"></ul>
+        </div>
+        <div>
+          <h3>Next Week Plan</h3>
+          <ul id="weeklyPlanList" class="fix-list"></ul>
+        </div>
+      </section>
+
+      <section class="panel feedback-panel">
+        <h2>Instant Feedback</h2>
+        <div id="scoreRow" class="score-row">
+          <span>Fluency: <strong id="fluencyScore">-</strong></span>
+          <span>Accuracy: <strong id="accuracyScore">-</strong></span>
+        </div>
+        <p id="coachTip" class="coach-tip">Send one sentence to get correction and coaching.</p>
+        <div>
+          <h3>Rewrite Suggestion</h3>
           <p id="rewriteBox" class="rewrite-box">-</p>
         </div>
         <div>
-          <h3>纠错列表</h3>
+          <h3>Fixes</h3>
           <ul id="fixList" class="fix-list"></ul>
         </div>
       </section>
 
       <section class="panel progress-panel">
-        <h2>学习进度</h2>
-        <div id="progressStats" class="progress-stats">请先登录并开始练习。</div>
+        <h2>Progress</h2>
+        <div id="progressStats" class="progress-stats">Login to view your progress.</div>
       </section>
     </main>
 
     <script src="/app.js" type="module"></script>
   </body>
 </html>
+

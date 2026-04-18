@@ -10,6 +10,7 @@ Mobile Web/PWA
      -> Feedback Service (rule-based coaching)
      -> Progress Service (scores + error tags)
      -> Daily Coach Service (plan/streak/check-in)
+     -> Weekly Coach Service (report/next-week plan)
      -> Repository Layer
         -> PostgreSQL (optional, USE_POSTGRES=true)
         -> In-memory fallback
@@ -41,6 +42,7 @@ Mobile Web/PWA
 - `feedbackService.js`: correction, rewrite, scores
 - `progressService.js`: summary aggregation
 - `dailyCoachService.js`: daily plan and streak logic
+- `weeklyCoachService.js`: weekly review generation and planning
 
 ## 3. Data Model
 
@@ -75,3 +77,4 @@ Protected:
 5. `POST /api/v1/progress/record`
 6. `GET /api/v1/daily/dashboard`
 7. `POST /api/v1/daily/checkin`
+8. `GET /api/v1/weekly/report`

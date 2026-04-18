@@ -7,7 +7,8 @@ const state = {
   lastAssistantMessage: "",
   recognition: null,
   listening: false,
-  dailyDashboard: null
+  dailyDashboard: null,
+  weeklyReport: null
 };
 
 const els = {
@@ -37,7 +38,13 @@ const els = {
   dailyMeta: document.querySelector("#dailyMeta"),
   dailyTaskList: document.querySelector("#dailyTaskList"),
   dailyNoteInput: document.querySelector("#dailyNoteInput"),
-  saveDailyBtn: document.querySelector("#saveDailyBtn")
+  saveDailyBtn: document.querySelector("#saveDailyBtn"),
+  refreshWeeklyBtn: document.querySelector("#refreshWeeklyBtn"),
+  weeklySummary: document.querySelector("#weeklySummary"),
+  weeklyStats: document.querySelector("#weeklyStats"),
+  weeklyStrengthList: document.querySelector("#weeklyStrengthList"),
+  weeklyRiskList: document.querySelector("#weeklyRiskList"),
+  weeklyPlanList: document.querySelector("#weeklyPlanList")
 };
 
 boot();
@@ -60,6 +67,7 @@ function bindEvents() {
   els.voiceBtn.addEventListener("click", toggleVoiceInput);
   els.speakBtn.addEventListener("click", speakAssistantReply);
   els.saveDailyBtn.addEventListener("click", saveDailyCheckin);
+  els.refreshWeeklyBtn.addEventListener("click", refreshWeeklyReport);
   els.messageInput.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       sendMessage();
@@ -90,10 +98,12 @@ async function tryRestoreSession() {
     updateAuthStatus();
     await refreshProgress();
     await refreshDailyDashboard();
+    await refreshWeeklyReport();
   } catch (_error) {
     clearAuth();
     updateAuthStatus();
     renderDailyDashboard(null);
+    renderWeeklyReport(null);
   }
 }
 
@@ -118,6 +128,7 @@ async function register() {
   afterAuthSuccess(data);
   await refreshProgress();
   await refreshDailyDashboard();
+  await refreshWeeklyReport();
   appendBubble("assistant", "Registration complete. Start with warm-up voice task.");
 }
 
@@ -134,6 +145,7 @@ async function login() {
   afterAuthSuccess(data);
   await refreshProgress();
   await refreshDailyDashboard();
+  await refreshWeeklyReport();
   appendBubble("assistant", "Login successful. Keep your streak alive today.");
 }
 
@@ -143,6 +155,7 @@ function logout() {
   updateAuthStatus();
   els.progressStats.textContent = "Login to view your progress.";
   renderDailyDashboard(null);
+  renderWeeklyReport(null);
   appendBubble("assistant", "Logged out.");
 }
 
@@ -160,6 +173,7 @@ function clearAuth() {
   state.user = null;
   state.profile = null;
   state.dailyDashboard = null;
+  state.weeklyReport = null;
   localStorage.removeItem("ewa_token");
 }
 
@@ -204,6 +218,7 @@ async function initSession() {
   appendBubble("assistant", "Session ready. Continue with your core scenario task.");
   await refreshProgress();
   await refreshDailyDashboard();
+  await refreshWeeklyReport();
 }
 
 async function sendMessage() {
@@ -246,6 +261,7 @@ async function sendMessage() {
 
     await refreshProgress();
     await refreshDailyDashboard();
+    await refreshWeeklyReport();
   } catch (error) {
     appendBubble("assistant", `Error: ${error.message}`);
   } finally {
@@ -329,6 +345,43 @@ function renderDailyDashboard(dashboard) {
   els.dailyNoteInput.value = plan.note || "";
 }
 
+async function refreshWeeklyReport() {
+  ensureAuthOrThrow();
+  const data = await request("/api/v1/weekly/report");
+  state.weeklyReport = data.report || null;
+  renderWeeklyReport(state.weeklyReport);
+}
+
+function renderWeeklyReport(report) {
+  if (!report) {
+    els.weeklySummary.textContent = "Login to generate weekly report.";
+    els.weeklyStats.innerHTML = "";
+    els.weeklyStrengthList.innerHTML = "";
+    els.weeklyRiskList.innerHTML = "";
+    els.weeklyPlanList.innerHTML = "";
+    return;
+  }
+
+  const stats = report.stats || {};
+  const trends = report.trends || {};
+  els.weeklySummary.textContent = report.summary || "";
+  els.weeklyStats.innerHTML = [
+    `Week: <strong>${report.weekRange?.start || "-"} to ${report.weekRange?.end || "-"}</strong>`,
+    `Practices: <strong>${stats.totalPractices || 0}</strong>`,
+    `Active days: <strong>${stats.activeDays || 0}</strong>`,
+    `Estimated minutes: <strong>${stats.estimatedMinutes || 0}</strong>`,
+    `Fluency: <strong>${stats.avgFluency || 0}</strong> (${trends.fluency || "flat"})`,
+    `Accuracy: <strong>${stats.avgAccuracy || 0}</strong> (${trends.accuracy || "flat"})`
+  ].join("<br />");
+
+  fillList(els.weeklyStrengthList, report.strengths || []);
+  fillList(els.weeklyRiskList, report.risks || []);
+  fillList(
+    els.weeklyPlanList,
+    (report.nextWeekPlan || []).map((item) => `${item.title}: ${item.action}`)
+  );
+}
+
 async function saveDailyCheckin() {
   ensureAuthOrThrow();
   if (!state.dailyDashboard?.plan?.tasks?.length) return;
@@ -348,7 +401,24 @@ async function saveDailyCheckin() {
 
   state.dailyDashboard = data.dashboard || state.dailyDashboard;
   renderDailyDashboard(state.dailyDashboard);
+  await refreshWeeklyReport();
   appendBubble("assistant", "Daily check-in saved.");
+}
+
+function fillList(el, items) {
+  el.innerHTML = "";
+  if (!items.length) {
+    const li = document.createElement("li");
+    li.textContent = "-";
+    el.appendChild(li);
+    return;
+  }
+
+  for (const item of items) {
+    const li = document.createElement("li");
+    li.textContent = item;
+    el.appendChild(li);
+  }
 }
 
 function setupVoiceRecognition() {
@@ -428,6 +498,7 @@ async function request(url, options = {}) {
       clearAuth();
       updateAuthStatus();
       renderDailyDashboard(null);
+      renderWeeklyReport(null);
     }
     throw new Error(text || `Request failed with ${response.status}`);
   }
@@ -440,4 +511,3 @@ function registerPWA() {
     navigator.serviceWorker.register("/sw.js").catch(() => {});
   }
 }
-

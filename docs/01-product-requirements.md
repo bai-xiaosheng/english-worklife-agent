@@ -46,6 +46,10 @@ Help Chinese learners become functional in real overseas work-life conversations
 - User checks completed tasks and writes 1-line reflection
 - System tracks streak days and 7-day active trend
 
+7. Weekly self-review
+- System generates a weekly report with trend comparison vs previous week
+- Report includes strengths, risks, and next-week action plan
+
 ## 5. Non-functional Requirements
 
 - Mobile-first responsive UX
