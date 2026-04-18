@@ -1,0 +1,25 @@
+{
+  "name": "english-worklife-agent",
+  "version": "0.1.0",
+  "description": "A mobile-first English learning agent for overseas work and daily life conversations.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "dev": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "test": "node tests/run-tests.js"
+  },
+  "keywords": [
+    "english-learning",
+    "conversation-agent",
+    "voice-practice",
+    "pwa"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2"
+  }
+}

@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>English Worklife Agent</title>
+    <meta name="theme-color" content="#0f3d3e" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-shape bg-one"></div>
+    <div class="bg-shape bg-two"></div>
+
+    <main class="app">
+      <header class="hero">
+        <p class="eyebrow">Daily 15 Minutes</p>
+        <h1>英语工作生活沟通训练</h1>
+        <p class="subtitle">
+          手机就能练。文字或语音都可以，系统会即时纠错并给你更自然的表达。
+        </p>
+      </header>
+
+      <section class="panel setup-panel">
+        <h2>学习设置</h2>
+        <div class="grid">
+          <label>
+            英语级别
+            <select id="levelSelect">
+              <option value="A1">A1</option>
+              <option value="A2" selected>A2</option>
+              <option value="B1">B1</option>
+              <option value="B2">B2</option>
+            </select>
+          </label>
+          <label>
+            每日时长（分钟）
+            <input id="dailyMinutesInput" type="number" min="10" max="60" value="15" />
+          </label>
+          <label>
+            练习场景
+            <select id="scenarioSelect"></select>
+          </label>
+          <label class="toggle-wrap">
+            中文提示
+            <input id="chineseHintToggle" type="checkbox" checked />
+          </label>
+        </div>
+        <button id="initBtn" class="btn primary">开始今天的练习</button>
+      </section>
+
+      <section class="panel chat-panel">
+        <div class="chat-head">
+          <h2>对话训练</h2>
+          <button id="speakBtn" class="btn secondary" type="button">朗读 AI 回复</button>
+        </div>
+        <div id="chatWindow" class="chat-window"></div>
+        <div class="composer">
+          <textarea id="messageInput" rows="3" placeholder="输入英文句子，或点击语音输入..."></textarea>
+          <div class="composer-actions">
+            <button id="voiceBtn" class="btn ghost" type="button">语音输入</button>
+            <button id="sendBtn" class="btn primary" type="button">发送</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel feedback-panel">
+        <h2>即时反馈</h2>
+        <div id="scoreRow" class="score-row">
+          <span>流畅度: <strong id="fluencyScore">-</strong></span>
+          <span>准确度: <strong id="accuracyScore">-</strong></span>
+        </div>
+        <p id="coachTip" class="coach-tip">发送一句英文后，这里会给你反馈。</p>
+        <div>
+          <h3>改写建议</h3>
+          <p id="rewriteBox" class="rewrite-box">-</p>
+        </div>
+        <div>
+          <h3>纠错列表</h3>
+          <ul id="fixList" class="fix-list"></ul>
+        </div>
+      </section>
+
+      <section class="panel progress-panel">
+        <h2>学习进度</h2>
+        <div id="progressStats" class="progress-stats">请先开始练习。</div>
+      </section>
+    </main>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
+
