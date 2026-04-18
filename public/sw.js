@@ -1,4 +1,4 @@
-const CACHE_NAME = "english-worklife-agent-v1";
+const CACHE_NAME = "english-worklife-agent-v2";
 const ASSETS = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
@@ -19,12 +19,27 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/api/")) return;
 
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).catch(() => caches.match("/index.html"));
-    })
+    (async () => {
+      const cache = await caches.open(CACHE_NAME);
+      try {
+        const networkResponse = await fetch(event.request);
+        if (url.origin === self.location.origin) {
+          cache.put(event.request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch (_error) {
+        const cached = await cache.match(event.request);
+        if (cached) return cached;
+        if (event.request.mode === "navigate") {
+          const fallback = await cache.match("/index.html");
+          if (fallback) return fallback;
+        }
+        throw _error;
+      }
+    })()
   );
 });
-

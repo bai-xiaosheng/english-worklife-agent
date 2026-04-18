@@ -10,11 +10,13 @@ Phase 2 is now included:
 - Daily loop dashboard (streak + checklist + reflection)
 - Weekly report (trends + strengths + risks + next-week plan)
 
-## Quick Start
+## Quick Start (Persistent Mode)
 
 ```bash
 npm install
 cp .env.example .env
+npm run db:up
+npm run db:init
 npm run dev
 ```
 
@@ -27,25 +29,48 @@ Open `http://localhost:3000`.
 - `OPENAI_MODEL`: optional, default `gpt-4.1-mini`
 - `DEFAULT_LEVEL`: default learner level, default `A2`
 - `APP_TIMEZONE`: daily plan timezone, default `Asia/Shanghai`
-- `USE_POSTGRES`: `true` or `false`
+- `USE_POSTGRES`: `true` or `false` (recommended `true` for persistence)
 - `DATABASE_URL`: PostgreSQL connection string
 - `JWT_SECRET`: JWT signing secret
 - `JWT_EXPIRES_IN`: JWT expiry, default `7d`
 
-## Optional PostgreSQL Setup
+## Docker PostgreSQL (Recommended)
 
 ```bash
-# set USE_POSTGRES=true and DATABASE_URL first
+npm run db:up
 npm run db:init
 ```
 
-If PostgreSQL is not enabled, the app runs with in-memory storage.
+To stop DB:
+
+```bash
+npm run db:down
+```
+
+If PostgreSQL is disabled, the app falls back to in-memory mode and data is lost after restart.
+
+## Verify Persistence
+
+After startup, call:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Expected: `"storage":"postgres"`.
+
+Then create an account, send a few messages, restart app (`npm run start` again), and login with the same account.
+Your progress should remain unchanged.
 
 ## Scripts
 
 - `npm run dev`: run server with watch mode
 - `npm run start`: run server normally
+- `npm run db:up`: start postgres container
+- `npm run db:down`: stop postgres container
+- `npm run db:logs`: view postgres logs
 - `npm run db:init`: initialize PostgreSQL tables
+- `npm run dev:persistent`: one command for db up + init + dev
 - `npm run test`: run unit tests
 
 ## API Summary

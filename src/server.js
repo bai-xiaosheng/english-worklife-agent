@@ -40,6 +40,14 @@ async function createApp() {
 
   app.use(cors());
   app.use(express.json({ limit: "1mb" }));
+  app.use((req, res, next) => {
+    const start = Date.now();
+    res.on("finish", () => {
+      // eslint-disable-next-line no-console
+      console.log(`${new Date().toISOString()} ${req.method} ${req.originalUrl} ${res.statusCode} ${Date.now() - start}ms`);
+    });
+    next();
+  });
   app.use(express.static(publicDir));
 
   app.get("/api/health", (_req, res) => {

@@ -59,18 +59,20 @@ async function boot() {
 }
 
 function bindEvents() {
-  els.registerBtn.addEventListener("click", register);
-  els.loginBtn.addEventListener("click", login);
+  els.registerBtn.addEventListener("click", () => register().catch((error) => showActionError(error)));
+  els.loginBtn.addEventListener("click", () => login().catch((error) => showActionError(error)));
   els.logoutBtn.addEventListener("click", logout);
-  els.initBtn.addEventListener("click", initSession);
-  els.sendBtn.addEventListener("click", sendMessage);
+  els.initBtn.addEventListener("click", () => initSession().catch((error) => showActionError(error)));
+  els.sendBtn.addEventListener("click", () => sendMessage().catch((error) => showActionError(error)));
   els.voiceBtn.addEventListener("click", toggleVoiceInput);
   els.speakBtn.addEventListener("click", speakAssistantReply);
-  els.saveDailyBtn.addEventListener("click", saveDailyCheckin);
-  els.refreshWeeklyBtn.addEventListener("click", refreshWeeklyReport);
+  els.saveDailyBtn.addEventListener("click", () => saveDailyCheckin().catch((error) => showActionError(error)));
+  els.refreshWeeklyBtn.addEventListener("click", () =>
+    refreshWeeklyReport().catch((error) => showActionError(error))
+  );
   els.messageInput.addEventListener("keydown", (event) => {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
-      sendMessage();
+      sendMessage().catch((error) => showActionError(error));
     }
   });
 }
@@ -198,6 +200,14 @@ function ensureAuthOrThrow() {
   }
 }
 
+function showActionError(error) {
+  const message = error?.message ? String(error.message) : "Unexpected error.";
+  if (els.authStatus) {
+    els.authStatus.textContent = `Action failed: ${message}`;
+  }
+  appendBubble("assistant", `Error: ${message}`);
+}
+
 async function initSession() {
   ensureAuthOrThrow();
   const payload = {
@@ -225,16 +235,17 @@ async function sendMessage() {
   const message = els.messageInput.value.trim();
   if (!message) return;
 
-  ensureAuthOrThrow();
-  if (!state.sessionReady) {
-    await initSession();
-  }
-
-  appendBubble("user", message);
-  els.messageInput.value = "";
   els.sendBtn.disabled = true;
 
   try {
+    ensureAuthOrThrow();
+    if (!state.sessionReady) {
+      await initSession();
+    }
+
+    appendBubble("user", message);
+    els.messageInput.value = "";
+
     const response = await request("/api/v1/chat", {
       method: "POST",
       body: JSON.stringify({
@@ -494,13 +505,22 @@ async function request(url, options = {}) {
 
   if (!response.ok) {
     const text = await response.text();
+    let message = text || `Request failed with ${response.status}`;
+    try {
+      const parsed = JSON.parse(text);
+      if (parsed?.error) {
+        message = parsed.error;
+      }
+    } catch (_error) {
+      // Keep original text message.
+    }
     if (response.status === 401 && !options.skipAuth) {
       clearAuth();
       updateAuthStatus();
       renderDailyDashboard(null);
       renderWeeklyReport(null);
     }
-    throw new Error(text || `Request failed with ${response.status}`);
+    throw new Error(message);
   }
 
   return response.json();
